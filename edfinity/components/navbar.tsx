@@ -57,7 +57,7 @@ export default function Navbar() {
               Courses
             </Link>
             <Link
-              href="/resources"
+              href="/dashboard/resources"
               className="text-black hover:text-black/80 transition-colors title font-normal text-lg"
             >
               Resources

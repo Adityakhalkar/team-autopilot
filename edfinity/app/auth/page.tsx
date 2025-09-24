@@ -101,62 +101,34 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl grid lg:grid-cols-2 bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div className="min-h-screen bg-white flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-4xl font-light tracking-tight mb-4 text-black title" style={{ fontFamily: 'var(--font-instrument-serif)' }}>
+            EdFinity
+          </h1>
+          <p className="text-lg text-gray-600 font-light">
+            Global EdTech Collaboration Layer
+          </p>
+        </motion.div>
 
-        {/* Left Side - Branding */}
-        <div className="hidden lg:flex bg-gradient-to-br from-blue-600 to-purple-600 p-8 flex-col justify-center items-center text-white">
+        {/* Auth Form */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center"
-          >
-            <h1 className="text-4xl font-bold mb-4">EdFinity</h1>
-            <p className="text-xl mb-6 opacity-90">
-              Global EdTech Collaboration Layer
-            </p>
-            <div className="space-y-4 text-left">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                  🌐
-                </div>
-                <span>Live Translation</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                  🤖
-                </div>
-                <span>AI Note Summarization</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                  📊
-                </div>
-                <span>Performance Analytics</span>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Right Side - Auth Form */}
-        <div className="p-8 lg:p-12">
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1], delay: 0.2 }}
           >
             {/* Header */}
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">
-                {isLogin ? 'Welcome Back' : 'Join EdFinity'}
+              <h2 className="text-2xl font-medium text-black mb-2">
+                {isLogin ? 'Sign In' : 'Sign Up'}
               </h2>
-              <p className="text-gray-600">
-                {isLogin
-                  ? 'Sign in to continue your learning journey'
-                  : 'Create your account and start learning'
-                }
-              </p>
             </div>
 
             {/* Toggle Buttons */}
@@ -164,9 +136,9 @@ export default function AuthPage() {
               <button
                 type="button"
                 onClick={toggleMode}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                className={`flex-1 py-3 px-4 rounded-md text-sm font-medium transition-all duration-300 ${
                   isLogin
-                    ? 'bg-white text-blue-600 shadow-sm'
+                    ? 'bg-white text-black shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
@@ -175,9 +147,9 @@ export default function AuthPage() {
               <button
                 type="button"
                 onClick={toggleMode}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                className={`flex-1 py-3 px-4 rounded-md text-sm font-medium transition-all duration-300 ${
                   !isLogin
-                    ? 'bg-white text-blue-600 shadow-sm'
+                    ? 'bg-white text-black shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
@@ -190,7 +162,8 @@ export default function AuthPage() {
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm"
+                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                className="bg-red-50 border border-red-100 text-red-600 px-6 py-4 rounded-xl text-base mb-6"
               >
                 {error}
               </motion.div>
@@ -208,7 +181,7 @@ export default function AuthPage() {
                   >
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-black mb-2">
                           First Name
                         </label>
                         <input
@@ -220,8 +193,8 @@ export default function AuthPage() {
                             }
                           })}
                           type="text"
-                          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                            signupErrors.firstName ? 'border-red-500' : 'border-gray-300'
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-black transition-all duration-300 text-sm ${
+                            signupErrors.firstName ? 'border-red-400' : 'border-gray-200 focus:border-gray-300'
                           }`}
                           placeholder="John"
                         />
@@ -230,7 +203,7 @@ export default function AuthPage() {
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-black mb-2">
                           Last Name
                         </label>
                         <input
@@ -242,8 +215,8 @@ export default function AuthPage() {
                             }
                           })}
                           type="text"
-                          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                            signupErrors.lastName ? 'border-red-500' : 'border-gray-300'
+                          className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-black transition-all duration-300 text-sm ${
+                            signupErrors.lastName ? 'border-red-400' : 'border-gray-200 focus:border-gray-300'
                           }`}
                           placeholder="Doe"
                         />
@@ -253,15 +226,15 @@ export default function AuthPage() {
                       </div>
                     </div>
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-black mb-2">
                         Role
                       </label>
                       <select
                         {...registerSignup('role', {
                           required: 'Please select a role'
                         })}
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                          signupErrors.role ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-black transition-all duration-300 text-sm ${
+                          signupErrors.role ? 'border-red-400' : 'border-gray-200 focus:border-gray-300'
                         }`}
                       >
                         <option value="student">Student</option>
@@ -277,7 +250,7 @@ export default function AuthPage() {
               </AnimatePresence>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-black mb-2">
                   Email Address
                 </label>
                 <input
@@ -298,8 +271,8 @@ export default function AuthPage() {
                       })
                   )}
                   type="email"
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                    (isLogin ? loginErrors.email : signupErrors.email) ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-black transition-all duration-300 text-sm ${
+                    (isLogin ? loginErrors.email : signupErrors.email) ? 'border-red-400' : 'border-gray-200 focus:border-gray-300'
                   }`}
                   placeholder="john@example.com"
                 />
@@ -311,7 +284,7 @@ export default function AuthPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-black mb-2">
                   Password
                 </label>
                 <input
@@ -336,8 +309,8 @@ export default function AuthPage() {
                       })
                   )}
                   type="password"
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                    (isLogin ? loginErrors.password : signupErrors.password) ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-black transition-all duration-300 text-sm ${
+                    (isLogin ? loginErrors.password : signupErrors.password) ? 'border-red-400' : 'border-gray-200 focus:border-gray-300'
                   }`}
                   placeholder="••••••••"
                 />
@@ -356,7 +329,7 @@ export default function AuthPage() {
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Confirm Password
                     </label>
                     <input
@@ -368,8 +341,8 @@ export default function AuthPage() {
                         }
                       })}
                       type="password"
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                        signupErrors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-black transition-all duration-300 text-sm ${
+                        signupErrors.confirmPassword ? 'border-red-400' : 'border-gray-200 focus:border-gray-300'
                       }`}
                       placeholder="••••••••"
                     />
@@ -383,10 +356,10 @@ export default function AuthPage() {
               {isLogin && (
                 <div className="flex items-center justify-between text-sm">
                   <label className="flex items-center">
-                    <input type="checkbox" className="mr-2 h-4 w-4 text-blue-600 rounded" />
-                    Remember me
+                    <input type="checkbox" className="mr-2 h-4 w-4 text-black rounded border-gray-300 focus:ring-black focus:ring-1" />
+                    <span className="text-gray-700">Remember me</span>
                   </label>
-                  <a href="#" className="text-blue-600 hover:underline">
+                  <a href="#" className="text-gray-600 hover:text-black transition-colors duration-300">
                     Forgot password?
                   </a>
                 </div>
@@ -397,7 +370,7 @@ export default function AuthPage() {
                 whileTap={{ scale: isLoading ? 1 : 0.98 }}
                 type="submit"
                 disabled={isLoading}
-                className={`w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg flex items-center justify-center ${
+                className={`w-full bg-black text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-800 transition-all duration-300 shadow-sm flex items-center justify-center text-sm ${
                   isLoading ? 'opacity-75 cursor-not-allowed' : ''
                 }`}
               >
@@ -414,9 +387,9 @@ export default function AuthPage() {
 
             {/* Divider */}
             <div className="my-6 flex items-center">
-              <div className="flex-1 border-t border-gray-300"></div>
-              <span className="px-4 text-sm text-gray-500">or continue with</span>
-              <div className="flex-1 border-t border-gray-300"></div>
+              <div className="flex-1 border-t border-gray-200"></div>
+              <span className="px-4 text-sm text-gray-500 font-light">or continue with</span>
+              <div className="flex-1 border-t border-gray-200"></div>
             </div>
 
             {/* Social Login */}
@@ -425,7 +398,7 @@ export default function AuthPage() {
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
-                className={`w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors ${
+                className={`w-full flex items-center justify-center px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-300 text-sm font-medium ${
                   isLoading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -443,7 +416,7 @@ export default function AuthPage() {
             <div className="mt-8 text-center">
               <Link
                 href="/"
-                className="text-blue-600 hover:underline text-sm font-medium"
+                className="text-gray-600 hover:text-black transition-colors duration-300 text-base font-medium"
               >
                 ← Back to Home
               </Link>
