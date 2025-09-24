@@ -278,13 +278,13 @@ export default function Home() {
                 <div className="flex justify-between items-center mb-48">
                   <BlurToFocusText delay={0}>
                     <h1 className="text-6xl md:text-8xl lg:text-9xl font-light tracking-tight title">
-                      Discover
+                      ReImagine
                     </h1>
                   </BlurToFocusText>
 
                   <BlurToFocusText delay={0.3}>
                     <h1 className="text-6xl md:text-8xl lg:text-9xl font-light tracking-tight title">
-                      Knowledge
+                      Learning
                     </h1>
                   </BlurToFocusText>
                 </div>
@@ -293,7 +293,7 @@ export default function Home() {
                 <div className="text-center">
                   <BlurToFocusText delay={0.6}>
                     <p className="text-2xl md:text-3xl lg:text-4xl font-light text-white/90 mb-12" style={{ fontFamily: 'var(--font-instrument-serif)' }}>
-                      Never limit your education
+                      Education redesigned for you.
                     </p>
                   </BlurToFocusText>
 

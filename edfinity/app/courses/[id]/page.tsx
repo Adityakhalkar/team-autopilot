@@ -27,38 +27,38 @@ import { dummyCourses, Course } from '@/lib/courses-data';
 const courseVideos = [
   {
     id: 1,
-    title: 'Introduction to React Fundamentals',
-    duration: '12:34',
+    title: 'But what is a neural network?',
+    duration: '19:13',
     isCurrentlyPlaying: true,
-    videoUrl: '/video/intro-react.mp4'
+    videoUrl: 'https://www.youtube.com/watch?v=aircAruvnKk'
   },
   {
     id: 2,
-    title: 'Setting up Development Environment',
-    duration: '8:45',
+    title: 'Gradient descent, how neural networks learn',
+    duration: '21:01',
     isCurrentlyPlaying: false,
-    videoUrl: '/video/setup.mp4'
+    videoUrl: 'https://www.youtube.com/watch?v=IHZwWFHWa-w'
   },
   {
     id: 3,
-    title: 'Understanding JSX and Components',
-    duration: '15:20',
+    title: 'What is backpropagation really doing?',
+    duration: '13:54',
     isCurrentlyPlaying: false,
-    videoUrl: '/video/jsx-components.mp4'
+    videoUrl: 'https://www.youtube.com/watch?v=Ilg3gGewQ5U'
   },
   {
     id: 4,
-    title: 'State Management with useState',
-    duration: '18:15',
+    title: 'Backpropagation calculus',
+    duration: '10:17',
     isCurrentlyPlaying: false,
-    videoUrl: '/video/usestate.mp4'
+    videoUrl: 'https://www.youtube.com/watch?v=tIeHLnjs5U8'
   },
   {
     id: 5,
-    title: 'Props and Component Communication',
+    title: 'Neural Networks pt 5',
     duration: '14:32',
     isCurrentlyPlaying: false,
-    videoUrl: '/video/props.mp4'
+    videoUrl: 'https://www.youtube.com/watch?v=aircAruvnKk'
   }
 ];
 
@@ -82,6 +82,12 @@ export default function CoursePage() {
   const [likesCount, setLikesCount] = useState(1247);
   const [showComments, setShowComments] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [translationText, setTranslationText] = useState('');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState('');
+  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+  const [notesText, setNotesText] = useState('');
+  const [notesError, setNotesError] = useState('');
 
   useEffect(() => {
     const courseId = params.id as string;
@@ -103,8 +109,66 @@ export default function CoursePage() {
     setIsPlaying(false);
   };
 
-  const generateNotes = () => {
-    alert('AI-generated notes feature coming soon!');
+  const generateNotes = async () => {
+    if (isGeneratingNotes) return;
+
+    setIsGeneratingNotes(true);
+    setNotesError('');
+
+    try {
+      const response = await fetch('http://localhost:8000/summary/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          video_urls: [currentVideo.videoUrl],
+          summary_type: 'notes',
+          max_length: 500
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Notes generation failed');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.summaries && data.summaries.length > 0) {
+        const summary = data.summaries[0];
+        setNotesText(summary.summary_text);
+
+        // Show notes in a modal or alert for now
+        const keyPoints = summary.key_points ? '\n\nKey Points:\n• ' + summary.key_points.join('\n• ') : '';
+        alert(`AI-Generated Notes:\n\n${summary.summary_text}${keyPoints}`);
+      } else {
+        throw new Error('No notes received');
+      }
+
+    } catch (error) {
+      console.error('Notes generation error:', error);
+      setNotesError('Notes generation service unavailable.');
+
+      // Fallback sample notes
+      const sampleNotes = `
+AI-Generated Notes for "${currentVideo.title}":
+
+• Understanding the fundamental concepts behind neural networks
+• How neural networks are inspired by biological neurons
+• The basic structure of a neural network with layers and connections
+• Each connection has a weight that determines its influence
+• Training involves adjusting these weights for better performance
+• Backpropagation is the key algorithm for learning
+• Deep networks contain multiple hidden layers
+• Applications in image recognition, natural language processing
+• The importance of activation functions in neural networks
+• Mathematical foundations of gradient descent optimization
+      `.trim();
+
+      alert(`Notes Generation Service Unavailable\n\nSample Notes:\n\n${sampleNotes}`);
+    } finally {
+      setIsGeneratingNotes(false);
+    }
   };
 
   const flagCopyright = () => {
@@ -121,6 +185,62 @@ export default function CoursePage() {
       text: course?.description,
       url: window.location.href,
     }) || alert('Link copied to clipboard!');
+  };
+
+  const handleTranslationChange = async (languageCode: string) => {
+    setSelectedTranslation(languageCode);
+
+    if (languageCode === 'en') {
+      setTranslationText('');
+      setTranslationError('');
+      return;
+    }
+
+    setIsTranslating(true);
+    setTranslationError('');
+
+    try {
+      const response = await fetch('http://localhost:8000/translate/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          video_urls: [currentVideo.videoUrl],
+          target_language: languageCode,
+          include_timestamps: false
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Translation failed');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.translations && data.translations.length > 0) {
+        setTranslationText(data.translations[0].translated_text);
+      } else {
+        throw new Error('No translation received');
+      }
+
+    } catch (error) {
+      console.error('Translation error:', error);
+      setTranslationError('Translation service unavailable. Using sample translation.');
+
+      // Fallback to sample translations
+      const sampleTranslations: { [key: string]: string } = {
+        'es': 'En esta lección, exploraremos los fundamentos de las redes neuronales y cómo funcionan...',
+        'fr': 'Dans cette leçon, nous explorerons les fondamentaux des réseaux de neurones et leur fonctionnement...',
+        'de': 'In dieser Lektion werden wir die Grundlagen neuronaler Netzwerke und ihre Funktionsweise erforschen...',
+        'ja': 'このレッスンでは、ニューラルネットワークの基礎とその仕組みを探求します...',
+        'zh': '在本课程中，我们将探索神经网络的基础知识及其工作原理...'
+      };
+
+      setTranslationText(sampleTranslations[languageCode] || 'Translation not available for this language.');
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   if (!course) {
@@ -238,10 +358,24 @@ export default function CoursePage() {
                 </button>
                 <button
                   onClick={generateNotes}
-                  className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                  disabled={isGeneratingNotes}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                    isGeneratingNotes
+                      ? 'bg-green-50 text-green-400 cursor-not-allowed'
+                      : 'bg-green-100 text-green-600 hover:bg-green-200'
+                  }`}
                 >
-                  <FileText className="h-4 w-4" />
-                  <span>Generate Notes</span>
+                  {isGeneratingNotes ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4" />
+                      <span>Generate Notes</span>
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={flagCopyright}
@@ -346,20 +480,26 @@ export default function CoursePage() {
                 {availableTranslations.map((translation) => (
                   <button
                     key={translation.code}
-                    onClick={() => setSelectedTranslation(translation.code)}
+                    onClick={() => handleTranslationChange(translation.code)}
+                    disabled={isTranslating}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
                       selectedTranslation === translation.code
                         ? 'bg-blue-100 text-blue-600 border border-blue-200'
                         : 'hover:bg-gray-50 border border-gray-200'
-                    }`}
+                    } ${isTranslating && selectedTranslation !== translation.code ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{translation.language}</span>
-                      {translation.isOriginal && (
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                          Original
-                        </span>
-                      )}
+                      <div className="flex items-center space-x-2">
+                        {translation.isOriginal && (
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                            Original
+                          </span>
+                        )}
+                        {isTranslating && selectedTranslation === translation.code && (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        )}
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -368,14 +508,33 @@ export default function CoursePage() {
               {/* Translation Preview */}
               {selectedTranslation !== 'en' && (
                 <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-800 font-medium mb-2">AI Translation Preview:</p>
-                  <p className="text-sm text-gray-700 italic">
-                    "In this lesson, we'll explore the fundamentals of React..."
-                    {selectedTranslation === 'es' && ' - "En esta lección, exploraremos los fundamentos de React..."'}
-                    {selectedTranslation === 'fr' && ' - "Dans cette leçon, nous explorerons les fondamentaux de React..."'}
-                    {selectedTranslation === 'de' && ' - "In dieser Lektion werden wir die Grundlagen von React erforschen..."'}
-                    {selectedTranslation === 'ja' && ' - "このレッスンでは、Reactの基礎を探求します..."'}
-                  </p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-blue-800 font-medium">AI Translation:</p>
+                    {isTranslating && (
+                      <span className="text-xs text-blue-600">Generating...</span>
+                    )}
+                  </div>
+
+                  {translationError && (
+                    <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                      {translationError}
+                    </div>
+                  )}
+
+                  {isTranslating ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span className="text-sm text-gray-600">Translating video content...</span>
+                    </div>
+                  ) : translationText ? (
+                    <p className="text-sm text-gray-700 leading-relaxed">
+                      "{translationText.length > 200 ? translationText.substring(0, 200) + '...' : translationText}"
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">
+                      Select a language to view AI translation
+                    </p>
+                  )}
                 </div>
               )}
             </div>

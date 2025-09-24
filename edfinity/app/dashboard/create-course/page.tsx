@@ -48,6 +48,7 @@ import {
   Edit3,
   PlayCircle
 } from 'lucide-react';
+import { fetchPlaylistVideos, YouTubeVideo, extractPlaylistId as getPlaylistId } from '@/lib/youtube';
 
 interface VideoData {
   id: string;
@@ -141,44 +142,13 @@ export default function CreateCoursePage() {
     }));
   };
 
-  const extractPlaylistId = (url: string): string | null => {
-    // Remove any whitespace
-    const cleanUrl = url.trim();
-
-    // Multiple regex patterns to handle different URL formats
-    const patterns = [
-      // Standard playlist URL: https://youtube.com/playlist?list=...
-      /(?:youtube\.com|youtu\.be)\/playlist\?list=([a-zA-Z0-9_-]+)/,
-
-      // Watch URL with playlist: https://youtube.com/watch?v=...&list=...
-      /(?:youtube\.com|youtu\.be)\/watch\?.*[&?]list=([a-zA-Z0-9_-]+)/,
-
-      // Short URL with playlist: https://youtu.be/...?list=...
-      /youtu\.be\/[a-zA-Z0-9_-]+\?.*list=([a-zA-Z0-9_-]+)/,
-
-      // Mobile share URL: https://youtube.com/playlist?list=...&si=...
-      /(?:youtube\.com|youtu\.be)\/playlist\?list=([a-zA-Z0-9_-]+)&?.*$/,
-
-      // Direct playlist ID (if user just pastes the ID)
-      /^[a-zA-Z0-9_-]{34}$|^[a-zA-Z0-9_-]{18}$/
-    ];
-
-    for (const pattern of patterns) {
-      const match = cleanUrl.match(pattern);
-      if (match) {
-        return match[1] || match[0]; // Return captured group or full match for direct ID
-      }
-    }
-
-    return null;
-  };
 
   const validatePlaylistUrl = (url: string): { isValid: boolean; error?: string } => {
     if (!url.trim()) {
       return { isValid: false, error: 'Please enter a YouTube playlist URL' };
     }
 
-    const playlistId = extractPlaylistId(url);
+    const playlistId = getPlaylistId(url);
 
     if (!playlistId) {
       return {
@@ -199,118 +169,162 @@ export default function CreateCoursePage() {
 
     setIsFetchingVideos(true);
     try {
-      const playlistId = extractPlaylistId(courseData.playlistUrl);
+      const playlistId = getPlaylistId(courseData.playlistUrl);
       if (!playlistId) {
         alert('Invalid YouTube playlist URL format');
         return;
       }
 
-      // Mock YouTube API response - In production, you'd call:
-      // const response = await fetch(`/api/youtube/playlist/${playlistId}`)
-      // const data = await response.json()
+      console.log('Fetching playlist:', playlistId);
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Fetch videos from YouTube API
+      const playlistResponse = await fetchPlaylistVideos(playlistId);
 
-      const mockVideos: VideoWithQuiz[] = [
-        {
-          id: '1',
-          title: 'Introduction to the Course',
-          duration: '5:30',
-          thumbnail: '/api/placeholder/320/180',
-          description: 'Welcome to our comprehensive course. In this video, we\'ll cover the basics and what you can expect.',
-          url: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
-          quiz: []
-        },
-        {
-          id: '2',
-          title: 'Chapter 1: Fundamentals',
-          duration: '12:45',
-          thumbnail: '/api/placeholder/320/180',
-          description: 'Deep dive into the fundamental concepts that form the foundation of this subject.',
-          url: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
-          quiz: []
-        },
-        {
-          id: '3',
-          title: 'Chapter 2: Advanced Concepts',
-          duration: '18:20',
-          thumbnail: '/api/placeholder/320/180',
-          description: 'Building on the fundamentals, we explore more complex ideas and their applications.',
-          url: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
-          quiz: []
-        },
-        {
-          id: '4',
-          title: 'Practical Examples & Case Studies',
-          duration: '15:10',
-          thumbnail: '/api/placeholder/320/180',
-          description: 'Real-world examples and case studies to help you understand the practical applications.',
-          url: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
-          quiz: []
-        },
-        {
-          id: '5',
-          title: 'Final Project & Summary',
-          duration: '9:55',
-          thumbnail: '/api/placeholder/320/180',
-          description: 'Wrap up with a final project and summary of everything we\'ve learned.',
-          url: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
-          quiz: []
-        }
-      ];
+      if (playlistResponse.error) {
+        console.warn('YouTube API warning:', playlistResponse.error);
+      }
+
+      if (playlistResponse.videos.length === 0) {
+        alert('No videos found in this playlist. Please check the playlist URL and make sure it\'s public or unlisted.');
+        return;
+      }
+
+      // Convert YouTube videos to our VideoWithQuiz format
+      const videosWithQuiz: VideoWithQuiz[] = playlistResponse.videos.map((video: YouTubeVideo) => ({
+        id: video.id,
+        title: video.title,
+        duration: video.duration,
+        thumbnail: video.thumbnail,
+        description: video.description,
+        url: `https://www.youtube.com/watch?v=${video.videoId}`,
+        quiz: []
+      }));
+
+      console.log(`Successfully fetched ${videosWithQuiz.length} videos from playlist`);
 
       setCourseData(prev => ({
         ...prev,
-        videos: mockVideos
+        videos: videosWithQuiz
       }));
 
       // Auto-generate quizzes for each video
-      generateQuizzesForVideos(mockVideos);
+      generateQuizzesForVideos(videosWithQuiz);
 
     } catch (error) {
       console.error('Error fetching playlist videos:', error);
-      alert('Error fetching playlist videos. Please try again.');
+      alert('Error fetching playlist videos. Please try again or check your internet connection.');
     } finally {
       setIsFetchingVideos(false);
     }
   };
 
   const generateQuizzesForVideos = async (videos: VideoWithQuiz[]) => {
-    // Mock AI-generated quiz questions for each video
-    const videosWithQuizzes = videos.map(video => ({
-      ...video,
-      quiz: [
-        {
-          id: `${video.id}-q1`,
-          question: `What is the main topic covered in "${video.title}"?`,
-          options: [
-            'Basic concepts and fundamentals',
-            'Advanced implementation techniques',
-            'Project management strategies',
-            'Historical background information'
-          ],
-          correctAnswer: 0,
-          explanation: 'This video focuses on introducing the core concepts and fundamental principles.'
-        },
-        {
-          id: `${video.id}-q2`,
-          question: 'Which approach is recommended for beginners?',
-          options: [
-            'Start with advanced topics',
-            'Focus on practical examples first',
-            'Begin with fundamental concepts',
-            'Skip theory and go to projects'
-          ],
-          correctAnswer: 2,
-          explanation: 'Building a strong foundation with fundamental concepts is crucial for long-term success.'
-        }
-      ]
-    }));
+    setIsLoading(true);
+    try {
+      // Extract video URLs from the video data
+      const videoUrls = videos.map(video => video.url);
 
-    setCourseData(prev => ({
-      ...prev,
-      videos: videosWithQuizzes
-    }));
+      // Call the backend API to generate quizzes
+      const response = await fetch('http://localhost:8000/quiz/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          video_urls: videoUrls,
+          num_questions: 3,
+          question_types: ['multiple_choice']
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate quizzes');
+      }
+
+      const data = await response.json();
+
+      // Map API response to our video format
+      const videosWithQuizzes = videos.map(video => {
+        // Find the corresponding quiz from API response
+        const apiQuiz = data.quizzes?.find((q: any) => q.video_url === video.url);
+
+        if (apiQuiz && apiQuiz.questions) {
+          // Convert API format to our quiz format
+          const convertedQuiz = apiQuiz.questions.map((q: any, index: number) => ({
+            id: `${video.id}-q${index + 1}`,
+            question: q.question,
+            options: q.options || [],
+            correctAnswer: q.options ? q.options.findIndex((opt: string) => opt === q.correct_answer) : 0,
+            explanation: q.explanation || 'No explanation provided.'
+          }));
+
+          return {
+            ...video,
+            quiz: convertedQuiz
+          };
+        } else {
+          // Fallback to mock data if API fails for this video
+          return {
+            ...video,
+            quiz: [
+              {
+                id: `${video.id}-q1`,
+                question: `What is the main topic covered in "${video.title}"?`,
+                options: [
+                  'Basic concepts and fundamentals',
+                  'Advanced implementation techniques',
+                  'Project management strategies',
+                  'Historical background information'
+                ],
+                correctAnswer: 0,
+                explanation: 'This video focuses on introducing the core concepts and fundamental principles.'
+              }
+            ]
+          };
+        }
+      });
+
+      setCourseData(prev => ({
+        ...prev,
+        videos: videosWithQuizzes
+      }));
+
+      // Show success message if some quizzes were generated
+      if (data.success && data.quizzes?.length > 0) {
+        console.log(`Successfully generated quizzes for ${data.quizzes.length} videos`);
+      }
+
+    } catch (error) {
+      console.error('Error generating quizzes:', error);
+
+      // Fallback to mock quizzes if API fails
+      const videosWithMockQuizzes = videos.map(video => ({
+        ...video,
+        quiz: [
+          {
+            id: `${video.id}-q1`,
+            question: `What is the main topic covered in "${video.title}"?`,
+            options: [
+              'Basic concepts and fundamentals',
+              'Advanced implementation techniques',
+              'Project management strategies',
+              'Historical background information'
+            ],
+            correctAnswer: 0,
+            explanation: 'This video focuses on introducing the core concepts and fundamental principles.'
+          }
+        ]
+      }));
+
+      setCourseData(prev => ({
+        ...prev,
+        videos: videosWithMockQuizzes
+      }));
+
+      alert('Using sample quizzes. Please check your backend connection for AI-generated quizzes.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const removeVideo = (videoId: string) => {
@@ -658,8 +672,11 @@ export default function CreateCoursePage() {
             className="bg-white border border-gray-100 rounded-2xl p-12 text-center"
           >
             <InfinityLoader size={48} className="mx-auto mb-4" />
-            <h3 className="text-xl font-light text-black title mb-2">Importing your videos</h3>
-            <p className="text-gray-600">This may take a few moments...</p>
+            <h3 className="text-xl font-light text-black title mb-2">Importing your playlist</h3>
+            <p className="text-gray-600">Fetching all videos from your YouTube playlist...</p>
+            <div className="mt-4 text-sm text-gray-500">
+              This process will import all videos and generate AI quizzes
+            </div>
           </motion.div>
         )}
 
