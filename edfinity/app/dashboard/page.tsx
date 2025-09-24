@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   BookOpen,
@@ -11,7 +11,8 @@ import {
   Clock,
   Globe,
   Brain,
-  BarChart3
+  BarChart3,
+  ArrowUpRight,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -21,28 +22,32 @@ export default function DashboardPage() {
       value: "4",
       description: "Currently enrolled",
       icon: BookOpen,
-      trend: "+2 this month"
+      trend: "+2 this month",
+      color: "text-black"
     },
     {
       title: "Study Hours",
       value: "127",
       description: "Total this month",
       icon: Clock,
-      trend: "+15% from last month"
+      trend: "+15% from last month",
+      color: "text-black"
     },
     {
       title: "Collaborations",
       value: "12",
       description: "Active sessions",
       icon: Users,
-      trend: "+3 new this week"
+      trend: "+3 new this week",
+      color: "text-black"
     },
     {
       title: "Performance",
       value: "87%",
       description: "Average score",
       icon: TrendingUp,
-      trend: "+5% improvement"
+      trend: "+5% improvement",
+      color: "text-black"
     }
   ];
 
@@ -95,53 +100,81 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Section */}
+    <div className="min-h-screen bg-white">
+      {/* Welcome Section - Apple-like Hero */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+        className="pt-16 pb-24"
       >
-        <div className="flex items-center justify-between">
-          <div className="p-6">
-            <h1 className="text-3xl font-bold text-gray-900">Welcome back!</h1>
-            <p className="text-gray-600 mt-1">Here's what's happening with your learning today.</p>
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center space-y-6">
+            <h1 className="text-6xl font-light tracking-tight text-black title">
+              Welcome back.
+            </h1>
+            <p className="text-xl text-gray-600 font-light max-w-2xl mx-auto leading-relaxed">
+              Continue your learning journey with personalized insights and seamless collaboration.
+            </p>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="pt-8"
+            >
+              <Button className="bg-black hover:bg-gray-900 text-white px-8 py-4 rounded-full text-base font-medium transition-all duration-200">
+                Continue Learning
+                <ArrowUpRight className="ml-2 h-5 w-5" />
+              </Button>
+            </motion.div>
           </div>
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <BookOpen className="mr-2 h-4 w-4" />
-            Start Learning
-          </Button>
         </div>
       </motion.div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statsCards.map((stat, index) => (
-          <motion.div
-            key={stat.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: index * 0.1 }}
-          >
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  {stat.title}
-                </CardTitle>
-                <stat.icon className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {stat.description}
-                </p>
-                <p className="text-xs text-green-600 mt-2">
-                  {stat.trend}
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+      {/* Stats Section - Clean Apple-style */}
+      <div className="max-w-6xl mx-auto px-6 pb-24">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.3 }}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"
+        >
+          {statsCards.map((stat, index) => (
+            <motion.div
+              key={stat.title}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.6,
+                delay: 0.4 + index * 0.1,
+                ease: [0.25, 0.1, 0.25, 1]
+              }}
+              className="group"
+            >
+              <div className="bg-white border border-gray-100 rounded-2xl p-8 hover:shadow-xl hover:shadow-black/5 transition-all duration-300 hover:-translate-y-1">
+                <div className="flex items-center justify-between mb-6">
+                  <stat.icon className="h-8 w-8 text-black" />
+                  <ArrowUpRight className="h-5 w-5 text-gray-400 group-hover:text-black transition-colors duration-200" />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-4xl font-light tracking-tight text-black title">
+                    {stat.value}
+                  </div>
+                  <div className="text-sm font-medium text-gray-900 uppercase tracking-wide">
+                    {stat.title}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {stat.description}
+                  </div>
+                  <div className="text-sm text-black font-medium pt-2">
+                    {stat.trend}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -20,7 +20,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-transparent w-full relative z-50">
+    <nav className="bg-white/10 w-full relative z-50">
         <div className="flex items-center justify-between h-12 relative">
 
           {/* Left Section - Logo with rect.svg background */}
