@@ -99,43 +99,61 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-white">
+      {/* Header Section - Apple-like Hero */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+        className="pt-16 pb-16"
       >
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-            <p className="text-gray-600 mt-1">Manage your account and preferences</p>
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="space-y-4">
+            <h1 className="text-5xl font-light tracking-tight text-black title">
+              Settings.
+            </h1>
+            <p className="text-xl text-gray-600 font-light max-w-2xl leading-relaxed">
+              Customize your experience and manage your account preferences.
+            </p>
           </div>
         </div>
       </motion.div>
 
-      <Tabs defaultValue="account" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="account" className="flex items-center space-x-2">
-            <Crown className="h-4 w-4" />
-            <span>Account</span>
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="flex items-center space-x-2">
-            <User className="h-4 w-4" />
-            <span>Profile</span>
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center space-x-2">
-            <Bell className="h-4 w-4" />
-            <span>Notifications</span>
-          </TabsTrigger>
-          <TabsTrigger value="privacy" className="flex items-center space-x-2">
-            <Shield className="h-4 w-4" />
-            <span>Privacy</span>
-          </TabsTrigger>
-          <TabsTrigger value="appearance" className="flex items-center space-x-2">
-            <Palette className="h-4 w-4" />
-            <span>Appearance</span>
-          </TabsTrigger>
-        </TabsList>
+      {/* Tabs Section - Apple-like Navigation */}
+      <div className="max-w-6xl mx-auto px-6 pb-16">
+        <Tabs defaultValue="account" className="space-y-16">
+          <TabsList className="h-auto bg-transparent border-none rounded-none w-full justify-start p-0 gap-0">
+            <TabsTrigger
+              value="account"
+              className="relative px-6 py-4 bg-transparent border-none rounded-none shadow-none text-gray-600 hover:text-black transition-colors duration-300 data-[state=active]:text-black data-[state=active]:bg-transparent font-normal text-base after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black after:scale-x-0 after:transition-transform after:duration-300 data-[state=active]:after:scale-x-100"
+            >
+              Account
+            </TabsTrigger>
+            <TabsTrigger
+              value="profile"
+              className="relative px-6 py-4 bg-transparent border-none rounded-none shadow-none text-gray-600 hover:text-black transition-colors duration-300 data-[state=active]:text-black data-[state=active]:bg-transparent font-normal text-base after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black after:scale-x-0 after:transition-transform after:duration-300 data-[state=active]:after:scale-x-100"
+            >
+              Profile
+            </TabsTrigger>
+            <TabsTrigger
+              value="notifications"
+              className="relative px-6 py-4 bg-transparent border-none rounded-none shadow-none text-gray-600 hover:text-black transition-colors duration-300 data-[state=active]:text-black data-[state=active]:bg-transparent font-normal text-base after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black after:scale-x-0 after:transition-transform after:duration-300 data-[state=active]:after:scale-x-100"
+            >
+              Notifications
+            </TabsTrigger>
+            <TabsTrigger
+              value="privacy"
+              className="relative px-6 py-4 bg-transparent border-none rounded-none shadow-none text-gray-600 hover:text-black transition-colors duration-300 data-[state=active]:text-black data-[state=active]:bg-transparent font-normal text-base after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black after:scale-x-0 after:transition-transform after:duration-300 data-[state=active]:after:scale-x-100"
+            >
+              Privacy
+            </TabsTrigger>
+            <TabsTrigger
+              value="appearance"
+              className="relative px-6 py-4 bg-transparent border-none rounded-none shadow-none text-gray-600 hover:text-black transition-colors duration-300 data-[state=active]:text-black data-[state=active]:bg-transparent font-normal text-base after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black after:scale-x-0 after:transition-transform after:duration-300 data-[state=active]:after:scale-x-100"
+            >
+              Appearance
+            </TabsTrigger>
+          </TabsList>
 
         {/* Account Settings - Role Management */}
         <TabsContent value="account" className="space-y-6">
@@ -539,6 +557,7 @@ export default function SettingsPage() {
           </motion.div>
         </TabsContent>
       </Tabs>
+    </div>
     </div>
   );
 }

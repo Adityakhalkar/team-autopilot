@@ -20,7 +20,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-white/10 w-full relative z-50">
+    <nav className="bg-white/60 w-full fixed top-0 left-0 z-50 backdrop-blur-sm">
         <div className="flex items-center justify-between h-12 relative">
 
           {/* Left Section - Logo with rect.svg background */}
@@ -34,11 +34,14 @@ export default function Navbar() {
             />
             <div className="absolute inset-0 flex items-center justify-center pl-6">
               <Link href="/" className="flex items-center space-x-3">
-                {/* Logo placeholder - you can add your actual logo here */}
-                <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">E</span>
-                </div>
-                <span className="text-black font-normal text-4xl title">
+                <Image
+                  src="/edfinity.png"
+                  alt="Edfinity Logo"
+                  width={32}
+                  height={32}
+                  className="w-12 h-12"
+                />
+                <span className="text-white font-normal text-4xl title" style={{ mixBlendMode: 'difference' }}>
                   Edfinity
                 </span>
               </Link>
@@ -49,19 +52,19 @@ export default function Navbar() {
           <div className="hidden md:flex items-center space-x-12">
             <Link
               href="/courses"
-              className="text-black hover:text-zinc-800 transition-colors title font-normal text-lg"
+              className="text-black hover:text-black/80 transition-colors title font-normal text-lg"
             >
               Courses
             </Link>
             <Link
               href="/resources"
-              className="text-black hover:text-zinc-800 transition-colors title font-normal text-lg"
+              className="text-black hover:text-black/80 transition-colors title font-normal text-lg"
             >
               Resources
             </Link>
             <Link
               href="/about"
-              className="text-black hover:text-zinc-800 transition-colors title font-normal text-lg"
+              className="text-black hover:text-black/80 transition-colors title font-normal text-lg"
             >
               About Us
             </Link>
@@ -80,7 +83,7 @@ export default function Navbar() {
               {user ? (
                 <DropdownMenu.Root open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
                   <DropdownMenu.Trigger asChild>
-                    <button className="flex items-center space-x-3 text-black hover:text-gray-700 transition-colors focus:outline-none">
+                    <button className="flex items-center space-x-3 text-white hover:text-white/80 transition-colors focus:outline-none" style={{ mixBlendMode: 'difference' }}>
                       {user.photoURL ? (
                         <img
                           src={user.photoURL}
@@ -154,13 +157,15 @@ export default function Navbar() {
                 <div className="flex items-center space-x-4">
                   <Link
                     href="/auth"
-                    className="text-black hover:text-gray-700 transition-colors font-normal text-sm"
+                    className="text-white hover:text-white/80 transition-colors font-normal text-sm"
+                    style={{ mixBlendMode: 'difference' }}
                   >
                     Login
                   </Link>
                   <Link
                     href="/auth"
-                    className="text-black hover:text-gray-700 transition-colors font-normal text-sm"
+                    className="text-white hover:text-white/80 transition-colors font-normal text-sm"
+                    style={{ mixBlendMode: 'difference' }}
                   >
                     Sign Up
                   </Link>

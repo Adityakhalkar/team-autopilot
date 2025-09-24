@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/lib/auth-context';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -75,37 +75,32 @@ export default function RoleUpgrade() {
       transition={{ duration: 0.5 }}
       className="space-y-6"
     >
-      {/* Current Role Status */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                Account Type
-                <Badge variant={isRole('creator') ? 'default' : 'secondary'}>
-                  {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                Your current account permissions and features
-              </CardDescription>
+      {/* Current Role Status - Apple-like Design */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-light text-black title">Account Type</h2>
+              <span className="px-3 py-1 bg-black text-white text-sm font-medium rounded-full">
+                {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
+              </span>
             </div>
-            {isRole('creator') && (
-              <Crown className="h-8 w-8 text-yellow-500" />
-            )}
+            <p className="text-gray-600">Your current account permissions and features</p>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {roleFeatures[userProfile.role as keyof typeof roleFeatures]?.map((feature, index) => (
-              <div key={index} className="flex items-center gap-3">
-                <feature.icon className="h-5 w-5 text-blue-600" />
-                <span className="text-sm">{feature.text}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+          {isRole('creator') && (
+            <Crown className="h-8 w-8 text-black" />
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {roleFeatures[userProfile.role as keyof typeof roleFeatures]?.map((feature, index) => (
+            <div key={index} className="flex items-center gap-4">
+              <feature.icon className="h-5 w-5 text-black" />
+              <span className="text-gray-900">{feature.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Upgrade to Creator */}
       {isRole('user') && (
