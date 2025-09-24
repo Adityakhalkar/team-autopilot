@@ -2,197 +2,336 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import InfinityLoader from '@/components/infinity-loader';
+import ReactMarkdown from 'react-markdown';
 import {
-  Play,
-  Pause,
-  Volume2,
-  Settings,
-  Maximize,
   ThumbsUp,
-  MessageCircle,
   FileText,
   Flag,
   Star,
   Users,
   Clock,
   BookOpen,
-  ChevronRight,
-  Download,
-  Heart,
-  Share2
+  ChevronDown
 } from 'lucide-react';
-import { dummyCourses, Course } from '@/lib/courses-data';
 
-// Mock video data for the course
-const courseVideos = [
-  {
-    id: 1,
-    title: 'But what is a neural network?',
-    duration: '19:13',
-    isCurrentlyPlaying: true,
-    videoUrl: 'https://www.youtube.com/watch?v=aircAruvnKk'
-  },
-  {
-    id: 2,
-    title: 'Gradient descent, how neural networks learn',
-    duration: '21:01',
-    isCurrentlyPlaying: false,
-    videoUrl: 'https://www.youtube.com/watch?v=IHZwWFHWa-w'
-  },
-  {
-    id: 3,
-    title: 'What is backpropagation really doing?',
-    duration: '13:54',
-    isCurrentlyPlaying: false,
-    videoUrl: 'https://www.youtube.com/watch?v=Ilg3gGewQ5U'
-  },
-  {
-    id: 4,
-    title: 'Backpropagation calculus',
-    duration: '10:17',
-    isCurrentlyPlaying: false,
-    videoUrl: 'https://www.youtube.com/watch?v=tIeHLnjs5U8'
-  },
-  {
-    id: 5,
-    title: 'Neural Networks pt 5',
-    duration: '14:32',
-    isCurrentlyPlaying: false,
-    videoUrl: 'https://www.youtube.com/watch?v=aircAruvnKk'
-  }
-];
+// Translation line interface for synchronized display
+interface TranslationLine {
+  id: string;
+  startTime: number; // in seconds
+  endTime: number; // in seconds
+  originalText: string;
+  translatedText: string;
+}
 
-// Mock translations data
-const availableTranslations = [
-  { language: 'English', code: 'en', isOriginal: true },
-  { language: 'Spanish', code: 'es', isOriginal: false },
-  { language: 'French', code: 'fr', isOriginal: false },
-  { language: 'German', code: 'de', isOriginal: false },
-  { language: 'Japanese', code: 'ja', isOriginal: false }
+// Synchronized translation data
+interface SynchronizedTranslation {
+  language: string;
+  lines: TranslationLine[];
+}
+
+// Firebase video data interface
+interface VideoData {
+  id: string;
+  title: string;
+  description: string;
+  duration: string;
+  thumbnail: string;
+  url: string;
+  creatorQuiz?: unknown[];
+}
+
+// Course interface
+interface Course {
+  id: string;
+  title: string;
+  description: string;
+  instructor?: {
+    name: string;
+    email: string;
+    uid: string;
+  };
+  creatorEmail: string;
+  category?: string;
+  level?: string;
+  price?: string;
+  rating: number;
+  enrollmentCount: number;
+  videos: VideoData[];
+  createdAt: { _methodName: string } | Date;
+  status: string;
+  playlistUrl?: string;
+  thumbnail?: string;
+  duration?: string;
+}
+
+// Video interface - matches Firebase data structure
+interface Video {
+  id: string;
+  title: string;
+  description: string;
+  duration: string;
+  thumbnail: string;
+  url: string; // Changed from youtubeUrl to match Firebase
+  order?: number;
+  summary?: string;
+  keyPoints?: string[];
+  transcription?: string;
+  creatorQuiz?: unknown[]; // Added to match Firebase data
+}
+
+// Available languages for translation
+const availableLanguages = [
+  { code: 'en', name: 'English', isOriginal: true },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'it', name: 'Italian' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'nl', name: 'Dutch' }
 ];
 
 export default function CoursePage() {
   const params = useParams();
   const router = useRouter();
   const [course, setCourse] = useState<Course | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentVideo, setCurrentVideo] = useState(courseVideos[0]);
-  const [selectedTranslation, setSelectedTranslation] = useState('en');
-  const [isLiked, setIsLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(1247);
-  const [showComments, setShowComments] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
+  const [courseVideos, setCourseVideos] = useState<Video[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
+
+  // Translation state
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [translationText, setTranslationText] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationError, setTranslationError] = useState('');
+
+  // Synchronized translation state
+  const [synchronizedTranslation, setSynchronizedTranslation] = useState<SynchronizedTranslation | null>(null);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const [currentLineIndex, setCurrentLineIndex] = useState(0);
+  const [youtubePlayer, setYoutubePlayer] = useState<any>(null);
+  const [showTranslationOverlay, setShowTranslationOverlay] = useState(false);
+
+  // Auto-scroll translation state
+  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
+  const [translationSentences, setTranslationSentences] = useState<string[]>([]);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+
+  // Notes state
   const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
   const [notesText, setNotesText] = useState('');
+  const [showNotes, setShowNotes] = useState(false);
   const [notesError, setNotesError] = useState('');
 
+  // Interaction state
+  const [isLiked, setIsLiked] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
+
   useEffect(() => {
-    const courseId = params.id as string;
-    const foundCourse = dummyCourses.find(c => c.id === courseId);
-    if (foundCourse) {
-      setCourse(foundCourse);
-    } else {
-      router.push('/courses');
-    }
+    const fetchCourseData = async () => {
+      try {
+        setLoading(true);
+        const courseId = params.id as string;
+
+        // Fetch course data
+        const courseRef = doc(db, 'courses', courseId);
+        const courseDoc = await getDoc(courseRef);
+
+        if (!courseDoc.exists()) {
+          router.push('/courses');
+          return;
+        }
+
+        const courseData = { id: courseDoc.id, ...courseDoc.data() } as Course;
+        setCourse(courseData);
+
+        // Set initial likes count from course data
+        setLikesCount(courseData.reviewCount || 0);
+
+        // Use course videos array directly (no subcollection needed based on Firebase structure)
+        if (courseData.videos && courseData.videos.length > 0) {
+          const videos = courseData.videos.map((video: VideoData, index: number) => ({
+            id: video.id || `video-${index}`,
+            title: video.title || `Video ${index + 1}`,
+            description: video.description || '',
+            duration: video.duration || 'N/A',
+            thumbnail: video.thumbnail || courseData.thumbnail || '',
+            url: video.url || courseData.playlistUrl || '', // Use 'url' field from Firebase
+            order: index,
+            creatorQuiz: video.creatorQuiz || []
+          })) as Video[];
+
+          setCourseVideos(videos);
+          setCurrentVideo(videos[0]);
+        } else {
+          // If no videos in the course, create empty state
+          setCourseVideos([]);
+          setCurrentVideo(null);
+        }
+
+      } catch (error) {
+        console.error('Error fetching course data:', error);
+        router.push('/courses');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCourseData();
   }, [params.id, router]);
+
+  // Update current line based on video time
+  useEffect(() => {
+    if (!synchronizedTranslation?.lines.length) return;
+
+    const currentLineIdx = synchronizedTranslation.lines.findIndex(
+      (line, index) => {
+        const isCurrentLine = currentVideoTime >= line.startTime && currentVideoTime <= line.endTime;
+        const isNextLine = index > 0 && currentVideoTime < line.startTime &&
+          currentVideoTime >= synchronizedTranslation.lines[index - 1].endTime;
+        return isCurrentLine || (isNextLine && index === currentLineIndex + 1);
+      }
+    );
+
+    if (currentLineIdx !== -1 && currentLineIdx !== currentLineIndex) {
+      setCurrentLineIndex(currentLineIdx);
+    }
+  }, [currentVideoTime, synchronizedTranslation, currentLineIndex]);
+
+  // YouTube Player API integration and real-time tracking
+  useEffect(() => {
+    let timeInterval: NodeJS.Timeout | null = null;
+
+    if (youtubePlayer && synchronizedTranslation) {
+      timeInterval = setInterval(() => {
+        try {
+          if (youtubePlayer.getCurrentTime) {
+            const currentTime = youtubePlayer.getCurrentTime();
+            setCurrentVideoTime(currentTime);
+          }
+        } catch (error) {
+          // Player not ready yet
+        }
+      }, 250); // Update every 250ms for smooth synchronization
+    }
+
+    return () => {
+      if (timeInterval) clearInterval(timeInterval);
+    };
+  }, [youtubePlayer, synchronizedTranslation]);
+
+  // Load YouTube Player API
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const loadYouTubeAPI = () => {
+      if (window.YT) {
+        initializePlayer();
+        return;
+      }
+
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+
+      (window as any).onYouTubeIframeAPIReady = initializePlayer;
+    };
+
+    const initializePlayer = () => {
+      const videoId = getYouTubeId(currentVideo?.url || '');
+      if (!videoId) return;
+
+      const player = new window.YT.Player('youtube-player', {
+        videoId,
+        events: {
+          onReady: (event: any) => {
+            setYoutubePlayer(event.target);
+          }
+        }
+      });
+    };
+
+    if (currentVideo?.url) {
+      loadYouTubeAPI();
+    }
+
+    return () => {
+      if (youtubePlayer) {
+        try {
+          youtubePlayer.destroy();
+        } catch (error) {
+          // Player already destroyed
+        }
+      }
+    };
+  }, [currentVideo?.url]);
+
+  // Auto-scroll through sentences
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (isAutoScrolling && translationSentences.length > 0) {
+      interval = setInterval(() => {
+        setCurrentSentenceIndex(prev =>
+          (prev + 1) % translationSentences.length
+        );
+      }, 3000); // Change sentence every 3 seconds
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isAutoScrolling, translationSentences.length]);
+
+  // Split text into sentences
+  const splitIntoSentences = (text: string): string[] => {
+    return text
+      .split(/[.!?]+/)
+      .map(sentence => sentence.trim())
+      .filter(sentence => sentence.length > 10) // Filter out very short fragments
+      .slice(0, 8); // Limit to first 8 sentences
+  };
+
+  const handleVideoSelect = (video: Video) => {
+    setCurrentVideo(video);
+    setShowNotes(false);
+    setNotesText('');
+    setTranslationText('');
+    setSelectedLanguage('en');
+    setSynchronizedTranslation(null);
+    setCurrentLineIndex(0);
+    setCurrentVideoTime(0);
+    setShowTranslationOverlay(false);
+  };
 
   const handleLike = () => {
     setIsLiked(!isLiked);
     setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
   };
 
-  const handleVideoSelect = (video: typeof courseVideos[0]) => {
-    setCurrentVideo(video);
-    setIsPlaying(false);
-  };
-
-  const generateNotes = async () => {
-    if (isGeneratingNotes) return;
-
-    setIsGeneratingNotes(true);
-    setNotesError('');
-
-    try {
-      const response = await fetch('http://localhost:8000/summary/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          video_urls: [currentVideo.videoUrl],
-          summary_type: 'notes',
-          max_length: 500
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Notes generation failed');
-      }
-
-      const data = await response.json();
-
-      if (data.success && data.summaries && data.summaries.length > 0) {
-        const summary = data.summaries[0];
-        setNotesText(summary.summary_text);
-
-        // Show notes in a modal or alert for now
-        const keyPoints = summary.key_points ? '\n\nKey Points:\n• ' + summary.key_points.join('\n• ') : '';
-        alert(`AI-Generated Notes:\n\n${summary.summary_text}${keyPoints}`);
-      } else {
-        throw new Error('No notes received');
-      }
-
-    } catch (error) {
-      console.error('Notes generation error:', error);
-      setNotesError('Notes generation service unavailable.');
-
-      // Fallback sample notes
-      const sampleNotes = `
-AI-Generated Notes for "${currentVideo.title}":
-
-• Understanding the fundamental concepts behind neural networks
-• How neural networks are inspired by biological neurons
-• The basic structure of a neural network with layers and connections
-• Each connection has a weight that determines its influence
-• Training involves adjusting these weights for better performance
-• Backpropagation is the key algorithm for learning
-• Deep networks contain multiple hidden layers
-• Applications in image recognition, natural language processing
-• The importance of activation functions in neural networks
-• Mathematical foundations of gradient descent optimization
-      `.trim();
-
-      alert(`Notes Generation Service Unavailable\n\nSample Notes:\n\n${sampleNotes}`);
-    } finally {
-      setIsGeneratingNotes(false);
-    }
-  };
-
-  const flagCopyright = () => {
-    alert('Copyright flag submitted. Our team will review this content.');
-  };
-
-  const toggleSave = () => {
-    setIsSaved(!isSaved);
-  };
-
-  const shareContent = () => {
-    navigator.share?.({
-      title: course?.title,
-      text: course?.description,
-      url: window.location.href,
-    }) || alert('Link copied to clipboard!');
-  };
-
-  const handleTranslationChange = async (languageCode: string) => {
-    setSelectedTranslation(languageCode);
+  const handleLanguageChange = async (languageCode: string) => {
+    setSelectedLanguage(languageCode);
 
     if (languageCode === 'en') {
       setTranslationText('');
       setTranslationError('');
+      setSynchronizedTranslation(null);
+      setCurrentLineIndex(0);
+      return;
+    }
+
+    if (!currentVideo?.url) {
+      setTranslationError('No video URL available for translation');
       return;
     }
 
@@ -206,409 +345,587 @@ AI-Generated Notes for "${currentVideo.title}":
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          video_urls: [currentVideo.videoUrl],
+          video_urls: [currentVideo.url],
           target_language: languageCode,
-          include_timestamps: false
+          include_timestamps: true
         })
       });
 
       if (!response.ok) {
-        throw new Error('Translation failed');
+        throw new Error('Translation service unavailable');
       }
 
       const data = await response.json();
 
       if (data.success && data.translations && data.translations.length > 0) {
-        setTranslationText(data.translations[0].translated_text);
+        const translation = data.translations[0];
+
+        // Check if we have timestamped data
+        if (translation.timestamped_segments) {
+          const synchronizedData: SynchronizedTranslation = {
+            language: languageCode,
+            lines: translation.timestamped_segments.map((segment: {
+              start_time?: number;
+              end_time?: number;
+              original_text?: string;
+              translated_text?: string;
+            }, index: number) => ({
+              id: `line-${index}`,
+              startTime: segment.start_time || 0,
+              endTime: segment.end_time || 0,
+              originalText: segment.original_text || '',
+              translatedText: segment.translated_text || ''
+            }))
+          };
+          setSynchronizedTranslation(synchronizedData);
+          setCurrentLineIndex(0);
+          setCurrentVideoTime(0);
+          setShowTranslationOverlay(true);
+        } else {
+          // Fallback to regular text translation
+          setTranslationText(translation.translated_text);
+          setSynchronizedTranslation(null);
+
+          // Initialize sentence-based auto-scroll
+          const sentences = splitIntoSentences(translation.translated_text);
+          setTranslationSentences(sentences);
+          setCurrentSentenceIndex(0);
+          setIsAutoScrolling(true);
+        }
       } else {
         throw new Error('No translation received');
       }
 
     } catch (error) {
       console.error('Translation error:', error);
-      setTranslationError('Translation service unavailable. Using sample translation.');
+      setTranslationError('Translation service unavailable. Using sample data for demo.');
 
-      // Fallback to sample translations
-      const sampleTranslations: { [key: string]: string } = {
-        'es': 'En esta lección, exploraremos los fundamentos de las redes neuronales y cómo funcionan...',
-        'fr': 'Dans cette leçon, nous explorerons les fondamentaux des réseaux de neurones et leur fonctionnement...',
-        'de': 'In dieser Lektion werden wir die Grundlagen neuronaler Netzwerke und ihre Funktionsweise erforschen...',
-        'ja': 'このレッスンでは、ニューラルネットワークの基礎とその仕組みを探求します...',
-        'zh': '在本课程中，我们将探索神经网络的基础知识及其工作原理...'
+      // Fallback sample translations with timestamps
+      const sampleSynchronizedTranslations: { [key: string]: SynchronizedTranslation } = {
+        'es': {
+          language: 'es',
+          lines: [
+            { id: 'line-0', startTime: 0, endTime: 5, originalText: 'But what is a neural network?', translatedText: '¿Pero qué es una red neuronal?' },
+            { id: 'line-1', startTime: 5, endTime: 10, originalText: 'In this chapter, I give a quick overview', translatedText: 'En este capítulo, doy una visión rápida' },
+            { id: 'line-2', startTime: 10, endTime: 15, originalText: 'of what neural networks are', translatedText: 'de lo que son las redes neuronales' },
+            { id: 'line-3', startTime: 15, endTime: 20, originalText: 'what they&apos;re doing, and how they learn', translatedText: 'qué están haciendo y cómo aprenden' },
+            { id: 'line-4', startTime: 20, endTime: 25, originalText: 'all without getting bogged down', translatedText: 'todo sin perderse en' },
+            { id: 'line-5', startTime: 25, endTime: 30, originalText: 'in the mathematics', translatedText: 'las matemáticas' }
+          ]
+        },
+        'fr': {
+          language: 'fr',
+          lines: [
+            { id: 'line-0', startTime: 0, endTime: 5, originalText: 'But what is a neural network?', translatedText: 'Mais qu&apos;est-ce qu&apos;un réseau de neurones ?' },
+            { id: 'line-1', startTime: 5, endTime: 10, originalText: 'In this chapter, I give a quick overview', translatedText: 'Dans ce chapitre, je donne un aperçu rapide' },
+            { id: 'line-2', startTime: 10, endTime: 15, originalText: 'of what neural networks are', translatedText: 'de ce que sont les réseaux de neurones' },
+            { id: 'line-3', startTime: 15, endTime: 20, originalText: 'what they&apos;re doing, and how they learn', translatedText: 'ce qu&apos;ils font et comment ils apprennent' },
+            { id: 'line-4', startTime: 20, endTime: 25, originalText: 'all without getting bogged down', translatedText: 'tout sans s&apos;enliser dans' },
+            { id: 'line-5', startTime: 25, endTime: 30, originalText: 'in the mathematics', translatedText: 'les mathématiques' }
+          ]
+        }
       };
 
-      setTranslationText(sampleTranslations[languageCode] || 'Translation not available for this language.');
+      const sampleData = sampleSynchronizedTranslations[languageCode];
+      console.log('Fallback sample data for', languageCode, ':', sampleData);
+      if (sampleData) {
+        setSynchronizedTranslation(sampleData);
+        setCurrentLineIndex(0);
+        setCurrentVideoTime(0);
+        setShowTranslationOverlay(true);
+      } else {
+        setTranslationText('Sample translation not available for this language.');
+        setSynchronizedTranslation(null);
+        setShowTranslationOverlay(false);
+      }
     } finally {
       setIsTranslating(false);
     }
   };
 
-  if (!course) {
+  const generateNotes = async () => {
+    if (isGeneratingNotes || !currentVideo?.url) return;
+
+    setIsGeneratingNotes(true);
+    setNotesError('');
+
+    try {
+      const response = await fetch('http://localhost:8000/summary/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          video_urls: [currentVideo.url],
+          summary_type: 'notes',
+          max_length: 500
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Notes generation service unavailable');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.summaries && data.summaries.length > 0) {
+        const summary = data.summaries[0];
+        // Look for mdtext field or fallback to summary_text
+        const markdownText = summary.mdtext || summary.summary_text;
+        setNotesText(markdownText);
+        setShowNotes(true);
+      } else {
+        throw new Error('No notes received');
+      }
+
+    } catch (error) {
+      console.error('Notes generation error:', error);
+      setNotesError('Notes generation service unavailable.');
+
+      // Fallback sample notes in markdown
+      const sampleNotes = `# AI-Generated Notes: ${currentVideo?.title || 'Current Video'}
+
+## Key Concepts
+
+### Neural Networks Fundamentals
+- **Definition**: Computational models inspired by biological neural networks
+- **Structure**: Layers of interconnected nodes (neurons)
+- **Purpose**: Process information and recognize patterns
+
+### Core Components
+
+#### 1. Neurons (Nodes)
+- Basic processing units of the network
+- Receive inputs, apply weights, and produce outputs
+- Use activation functions to introduce non-linearity
+
+#### 2. Weights and Connections
+- Determine the strength of connections between neurons
+- **Training process**: Adjusting weights to improve performance
+- **Learning**: Occurs through weight modification
+
+#### 3. Layers
+- **Input Layer**: Receives initial data
+- **Hidden Layers**: Process information (deep networks have multiple)
+- **Output Layer**: Produces final results
+
+### Learning Process
+
+#### Backpropagation Algorithm
+- Key mechanism for training neural networks
+- Calculates gradients to optimize weights
+- Works backwards from output to input layers
+
+#### Gradient Descent
+- Optimization technique to minimize errors
+- **Iterative process**: Gradually improves network performance
+- **Learning rate**: Controls speed of learning
+
+### Applications
+- Image recognition and computer vision
+- Natural language processing
+- Speech recognition
+- Recommendation systems
+- Medical diagnosis
+
+### Important Notes
+> Neural networks require large amounts of data and computational power for effective training.
+
+**Next Steps**: Practice with simple neural network implementations to understand these concepts better.`;
+
+      setNotesText(sampleNotes);
+      setShowNotes(true);
+    } finally {
+      setIsGeneratingNotes(false);
+    }
+  };
+
+  const flagCopyright = () => {
+    alert('Copyright flag submitted. Our team will review this content within 24 hours.');
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading course...</p>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="flex items-center space-x-3">
+          <InfinityLoader size={24} />
+          <span className="text-gray-600">Loading course...</span>
         </div>
       </div>
     );
   }
 
+  if (!course || !currentVideo) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-2xl font-light text-black title">Course not found</p>
+          <p className="text-gray-600">This course may have been removed or doesn't exist.</p>
+          <button
+            onClick={() => router.push('/courses')}
+            className="bg-black text-white px-6 py-3 rounded-full hover:bg-gray-900 transition-colors"
+          >
+            Browse Courses
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract YouTube video ID from URL for embedding
+  const getYouTubeId = (url: string) => {
+    const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+    return match ? match[1] : null;
+  };
+
+  const videoId = getYouTubeId(currentVideo.url || '');
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-[1800px] mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
-          {/* Main Video Section - Left Side */}
+    <div className="min-h-screen bg-white">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+
+          {/* Left Side - Video Player and Content */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Video Player */}
-            <div className="bg-black rounded-lg overflow-hidden aspect-video relative group">
-              {/* Video Placeholder */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600">
-                <div className="absolute inset-0 bg-black/40"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <button
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    className="bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-all duration-300 rounded-full p-4 group-hover:scale-110"
-                  >
-                    {isPlaying ? (
-                      <Pause className="h-12 w-12 text-white" />
-                    ) : (
-                      <Play className="h-12 w-12 text-white ml-1" />
+            {/* YouTube Video Player */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+            >
+              <div className="bg-black rounded-2xl overflow-hidden aspect-video relative group">
+                {videoId ? (
+                  <>
+                    <iframe
+                      id="youtube-player"
+                      src={`https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&modestbranding=1&enablejsapi=1`}
+                      title={currentVideo.title}
+                      className="w-full h-full"
+                      frameBorder="0"
+                      allowFullScreen
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    />
+
+                    {/* Translation Overlay */}
+                    {showTranslationOverlay && synchronizedTranslation && (
+                      <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
+                        <div className="flex flex-col items-center space-y-1">
+                          {/* Current translation line */}
+                          {synchronizedTranslation.lines[currentLineIndex] && (
+                            <div className="bg-black/80 backdrop-blur-sm px-3 py-2 rounded-lg max-w-4xl">
+                              <p className="text-white text-center text-base font-medium leading-relaxed">
+                                {synchronizedTranslation.lines[currentLineIndex].translatedText}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Next line preview (optional) */}
+                          {synchronizedTranslation.lines[currentLineIndex + 1] && (
+                            <div className="bg-black/40 backdrop-blur-sm px-3 py-1 rounded max-w-3xl">
+                              <p className="text-white/70 text-center text-sm leading-relaxed">
+                                {synchronizedTranslation.lines[currentLineIndex + 1].translatedText}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Translation controls */}
+                          <div className="pointer-events-auto flex items-center space-x-3 mt-2">
+                            <button
+                              onClick={() => setShowTranslationOverlay(false)}
+                              className="bg-black/60 hover:bg-black/80 text-white px-2 py-1 rounded text-xs font-medium transition-colors"
+                            >
+                              Hide Subtitles
+                            </button>
+                            <div className="bg-black/60 text-white/70 px-2 py-1 rounded text-xs">
+                              {Math.floor(currentVideoTime / 60)}:{Math.floor(currentVideoTime % 60).toString().padStart(2, '0')}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Video Controls */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="flex items-center justify-between text-white">
-                  <div className="flex items-center space-x-4">
-                    <button onClick={() => setIsPlaying(!isPlaying)}>
-                      {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                    </button>
-                    <Volume2 className="h-5 w-5" />
-                    <span className="text-sm">2:34 / {currentVideo.duration}</span>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-white text-6xl font-light opacity-40 mb-4">
+                        <BookOpen className="h-16 w-16 mx-auto" />
+                      </div>
+                      <p className="text-white/60">Video not available</p>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <Settings className="h-5 w-5" />
-                    <Maximize className="h-5 w-5" />
-                  </div>
-                </div>
-                <div className="mt-2 bg-white/30 rounded-full h-1">
-                  <div className="bg-blue-500 h-1 rounded-full w-1/4"></div>
-                </div>
+                )}
               </div>
-            </div>
+            </motion.div>
 
-            {/* Video Title and Info */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h1 className="text-2xl font-bold text-gray-900 mb-3">{currentVideo.title}</h1>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-4 text-gray-600">
-                  <span className="flex items-center space-x-1">
-                    <Users className="h-4 w-4" />
-                    <span>{course.studentsEnrolled.toLocaleString()} students</span>
-                  </span>
-                  <span className="flex items-center space-x-1">
-                    <Clock className="h-4 w-4" />
-                    <span>{currentVideo.duration}</span>
-                  </span>
-                  <span className="flex items-center space-x-1">
-                    <Star className="h-4 w-4 text-yellow-400" />
-                    <span>{course.rating}</span>
-                  </span>
-                </div>
+            {/* Video Info */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1, ease: [0.25, 0.1, 0.25, 1] }}
+              className="space-y-4"
+            >
+              <h1 className="text-3xl font-light tracking-tight text-black title">
+                {currentVideo.title}
+              </h1>
+
+              <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={toggleSave}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                      isSaved ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    onClick={handleLike}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all duration-200 ${
+                      isLiked
+                        ? 'bg-black text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                     }`}
                   >
-                    <Heart className={`h-4 w-4 ${isSaved ? 'fill-current' : ''}`} />
-                    <span>{isSaved ? 'Saved' : 'Save'}</span>
+                    <ThumbsUp className={`h-5 w-5 ${isLiked ? 'fill-current' : ''}`} />
+                    <span>{likesCount.toLocaleString()}</span>
                   </button>
+
                   <button
-                    onClick={shareContent}
-                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                    onClick={generateNotes}
+                    disabled={isGeneratingNotes}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all duration-200 ${
+                      isGeneratingNotes
+                        ? 'bg-green-50 text-green-400 cursor-not-allowed'
+                        : 'bg-green-100 hover:bg-green-200 text-green-700'
+                    }`}
                   >
-                    <Share2 className="h-4 w-4" />
-                    <span>Share</span>
+                    {isGeneratingNotes ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
+                        <span>Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-5 w-5" />
+                        <span>Notes</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={flagCopyright}
+                    className="flex items-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl transition-all duration-200"
+                  >
+                    <Flag className="h-5 w-5" />
+                    <span>Flag</span>
                   </button>
                 </div>
               </div>
+            </motion.div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap gap-3 pb-4 border-b border-gray-200 mb-4">
-                <button
-                  onClick={handleLike}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                    isLiked ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  <ThumbsUp className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
-                  <span>{likesCount.toLocaleString()}</span>
-                </button>
-                <button
-                  onClick={() => setShowComments(!showComments)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  <span>Comments</span>
-                </button>
-                <button
-                  onClick={generateNotes}
-                  disabled={isGeneratingNotes}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                    isGeneratingNotes
-                      ? 'bg-green-50 text-green-400 cursor-not-allowed'
-                      : 'bg-green-100 text-green-600 hover:bg-green-200'
-                  }`}
-                >
-                  {isGeneratingNotes ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-                      <span>Generating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4" />
-                      <span>Generate Notes</span>
-                    </>
+            {/* Notes Section */}
+            {showNotes && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+                className="bg-white border border-gray-100 rounded-2xl p-8"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-light text-black title">AI-Generated Notes</h3>
+                  {notesError && (
+                    <span className="text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
+                      Using sample content
+                    </span>
                   )}
-                </button>
-                <button
-                  onClick={flagCopyright}
-                  className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                >
-                  <Flag className="h-4 w-4" />
-                  <span>Flag Copyright</span>
-                </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors">
-                  <Download className="h-4 w-4" />
-                  <span>Download</span>
-                </button>
-              </div>
-
-              {/* Course Description */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">About This Course</h3>
-                <p className="text-gray-600 leading-relaxed">{course.description}</p>
-                <div className="mt-4 flex items-center space-x-4 text-sm text-gray-500">
-                  <span>Instructor: {course.instructor}</span>
-                  <span>•</span>
-                  <span>Last updated: {course.lastUpdated}</span>
-                  <span>•</span>
-                  <span>{course.language}</span>
                 </div>
-              </div>
-            </div>
 
-            {/* Next Videos Section */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">Up Next</h3>
-              <div className="space-y-3">
-                {courseVideos.filter(video => video.id !== currentVideo.id).slice(0, 3).map((video) => (
-                  <div
-                    key={video.id}
-                    className="flex items-center space-x-4 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => handleVideoSelect(video)}
-                  >
-                    <div className="flex-shrink-0 w-40 h-24 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg relative">
-                      <div className="absolute inset-0 bg-black/20 rounded-lg flex items-center justify-center">
-                        <Play className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-gray-900 truncate">{video.title}</h4>
-                      <p className="text-sm text-gray-500 mt-1">{video.duration}</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-gray-400" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Comments Section */}
-            {showComments && (
-              <div className="bg-white rounded-lg p-6 shadow-sm">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">Comments</h3>
-                <div className="space-y-4">
-                  <div className="flex space-x-3">
-                    <div className="flex-shrink-0 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">JD</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-sm font-medium text-gray-900">John Doe</p>
-                        <p className="text-sm text-gray-600 mt-1">Great explanation! This really helped me understand React hooks better.</p>
-                      </div>
-                      <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-                        <span>2 hours ago</span>
-                        <button className="hover:text-blue-600">Reply</button>
-                        <button className="hover:text-blue-600">Like</button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex space-x-3">
-                    <div className="flex-shrink-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">SM</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-sm font-medium text-gray-900">Sarah Miller</p>
-                        <p className="text-sm text-gray-600 mt-1">Could you make a video about useEffect next? Thanks!</p>
-                      </div>
-                      <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-                        <span>5 hours ago</span>
-                        <button className="hover:text-blue-600">Reply</button>
-                        <button className="hover:text-blue-600">Like</button>
-                      </div>
-                    </div>
-                  </div>
+                <div className="prose prose-gray max-w-none">
+                  <ReactMarkdown>{notesText}</ReactMarkdown>
                 </div>
-              </div>
+              </motion.div>
             )}
+
+            {/* Course Description */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+              className="bg-white border border-gray-100 rounded-2xl p-8"
+            >
+              <h3 className="text-xl font-light text-black mb-4 title">About This Course</h3>
+              <p className="text-gray-600 leading-relaxed mb-6">{course.description}</p>
+
+              <div className="flex items-center space-x-6 text-sm text-gray-500">
+                <span>Instructor: {course.instructor?.name || course.creatorEmail}</span>
+                <span>•</span>
+                <span>Category: {course.category || 'General'}</span>
+                <span>•</span>
+                <span>Level: {course.level || 'All Levels'}</span>
+              </div>
+            </motion.div>
           </div>
 
-          {/* AI Translations Sidebar - Right Side */}
+          {/* Right Side - Translations and Course Content */}
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Translations</h3>
-              <div className="space-y-3">
-                {availableTranslations.map((translation) => (
-                  <button
-                    key={translation.code}
-                    onClick={() => handleTranslationChange(translation.code)}
-                    disabled={isTranslating}
-                    className={`w-full text-left p-3 rounded-lg transition-colors ${
-                      selectedTranslation === translation.code
-                        ? 'bg-blue-100 text-blue-600 border border-blue-200'
-                        : 'hover:bg-gray-50 border border-gray-200'
-                    } ${isTranslating && selectedTranslation !== translation.code ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{translation.language}</span>
-                      <div className="flex items-center space-x-2">
-                        {translation.isOriginal && (
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                            Original
-                          </span>
-                        )}
-                        {isTranslating && selectedTranslation === translation.code && (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+
+            {/* AI Translations */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.1, ease: [0.25, 0.1, 0.25, 1] }}
+              className="bg-white border border-gray-100 rounded-2xl p-6"
+            >
+              <h3 className="text-lg font-light text-black mb-4 title">AI Translations</h3>
+
+              {/* Language Selector */}
+              <div className="relative mb-4">
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
+                  disabled={isTranslating}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-10 focus:ring-2 focus:ring-black focus:border-black transition-all duration-200 text-black appearance-none"
+                >
+                  {availableLanguages.map(lang => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name} {lang.isOriginal ? '(Original)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+              </div>
+
+              {/* Translation Status */}
+              {selectedLanguage !== 'en' && (
+                <div className="bg-gray-50 rounded-xl p-4">
+                  {isTranslating ? (
+                    <div className="flex items-center space-x-3">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></div>
+                      <span className="text-gray-600">Loading translations...</span>
+                    </div>
+                  ) : synchronizedTranslation ? (
+                    <div className="space-y-3">
+                      {translationError && (
+                        <div className="p-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-800">
+                          {translationError}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-700">
+                          <div className="font-medium">Synchronized Subtitles</div>
+                          <div className="text-xs text-gray-500">{synchronizedTranslation.lines.length} lines available</div>
+                        </div>
+
+                        <button
+                          onClick={() => setShowTranslationOverlay(!showTranslationOverlay)}
+                          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                            showTranslationOverlay
+                              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-300'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                          }`}
+                        >
+                          {showTranslationOverlay ? '👁️ Subtitles ON' : '👁️ Show Subtitles'}
+                        </button>
+                      </div>
+
+                      <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                        Current: Line {currentLineIndex + 1} • Time: {Math.floor(currentVideoTime / 60)}:{Math.floor(currentVideoTime % 60).toString().padStart(2, '0')}
+                      </div>
+                    </div>
+                  ) : translationText ? (
+                    <div>
+                      {translationError && (
+                        <div className="mb-3 p-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-800">
+                          {translationError}
+                        </div>
+                      )}
+
+                      {/* Auto-scroll sentence display */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs text-gray-500">
+                            Sentence {currentSentenceIndex + 1} of {translationSentences.length}
+                          </div>
+                          <button
+                            onClick={() => setIsAutoScrolling(!isAutoScrolling)}
+                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${
+                              isAutoScrolling
+                                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {isAutoScrolling ? '⏸️ Pause' : '▶️ Auto-scroll'}
+                          </button>
+                        </div>
+
+                        {translationSentences.length > 0 ? (
+                          <div className="text-gray-700 text-sm leading-relaxed">
+                            {/* Current sentence with emphasis */}
+                            <p className="font-medium text-gray-900 mb-2">
+                              {translationSentences[currentSentenceIndex]}
+                            </p>
+
+                            {/* Next few sentences in lighter text */}
+                            <div className="space-y-1 text-gray-500 text-xs">
+                              {translationSentences
+                                .slice(currentSentenceIndex + 1, currentSentenceIndex + 3)
+                                .map((sentence, index) => (
+                                  <p key={index} className="opacity-70">
+                                    {sentence}
+                                  </p>
+                                ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-gray-700 text-sm leading-relaxed">
+                            {translationText}
+                          </p>
                         )}
                       </div>
                     </div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Translation Preview */}
-              {selectedTranslation !== 'en' && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-blue-800 font-medium">AI Translation:</p>
-                    {isTranslating && (
-                      <span className="text-xs text-blue-600">Generating...</span>
-                    )}
-                  </div>
-
-                  {translationError && (
-                    <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                      {translationError}
-                    </div>
-                  )}
-
-                  {isTranslating ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      <span className="text-sm text-gray-600">Translating video content...</span>
-                    </div>
-                  ) : translationText ? (
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      "{translationText.length > 200 ? translationText.substring(0, 200) + '...' : translationText}"
-                    </p>
                   ) : (
-                    <p className="text-sm text-gray-500 italic">
-                      Select a language to view AI translation
+                    <p className="text-gray-500 text-sm italic">
+                      Loading translation...
                     </p>
                   )}
                 </div>
               )}
-            </div>
+            </motion.div>
 
-            {/* Course Playlist */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
+            {/* Course Videos */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+              className="bg-white border border-gray-100 rounded-2xl p-6"
+            >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Course Content</h3>
+                <h3 className="text-lg font-light text-black title">Course Content</h3>
                 <span className="text-sm text-gray-500">{courseVideos.length} videos</span>
               </div>
+
               <div className="space-y-2">
                 {courseVideos.map((video, index) => (
                   <div
                     key={video.id}
-                    className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                    className={`p-3 rounded-xl cursor-pointer transition-all duration-200 ${
                       currentVideo.id === video.id
-                        ? 'bg-blue-100 border border-blue-200'
-                        : 'hover:bg-gray-50'
+                        ? 'bg-black text-white'
+                        : 'hover:bg-gray-50 text-gray-900'
                     }`}
                     onClick={() => handleVideoSelect(video)}
                   >
                     <div className="flex items-center space-x-3">
-                      <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
+                      <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                        currentVideo.id === video.id
+                          ? 'bg-white text-black'
+                          : 'bg-gray-200 text-gray-600'
+                      }`}>
                         {index + 1}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${
-                          currentVideo.id === video.id ? 'text-blue-600' : 'text-gray-900'
-                        }`}>
+                        <p className="text-sm font-medium truncate">
                           {video.title}
                         </p>
-                        <p className="text-xs text-gray-500">{video.duration}</p>
                       </div>
-                      {currentVideo.id === video.id && (
-                        <div className="flex-shrink-0">
-                          {isPlaying ? (
-                            <Pause className="h-4 w-4 text-blue-600" />
-                          ) : (
-                            <Play className="h-4 w-4 text-blue-600" />
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Course Info */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Details</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Duration</span>
-                  <span className="font-medium">{course.duration}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Level</span>
-                  <span className="font-medium">{course.level}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Students</span>
-                  <span className="font-medium">{course.studentsEnrolled.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Language</span>
-                  <span className="font-medium">{course.language}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Category</span>
-                  <span className="font-medium">{course.category}</span>
-                </div>
-              </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </div>

@@ -1,8 +1,13 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/lib/auth-context';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import InfinityLoader from '@/components/infinity-loader';
 import {
   BookOpen,
   Users,
@@ -13,91 +18,155 @@ import {
   Brain,
   BarChart3,
   ArrowUpRight,
+  Loader2,
 } from 'lucide-react';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    enrolledCourses: 0,
+    createdCourses: 0,
+    totalStudents: 0,
+    avgRating: 0
+  });
+  const [recentCourses, setRecentCourses] = useState<any[]>([]);
+  const [myEnrollments, setMyEnrollments] = useState<any[]>([]);
+  const [myCourses, setMyCourses] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user?.uid) return;
+
+      try {
+        setLoading(true);
+
+        // Fetch user's created courses
+        const createdCoursesQuery = query(
+          collection(db, 'courses'),
+          where('creatorId', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
+        const createdCoursesSnapshot = await getDocs(createdCoursesQuery);
+        const createdCourses = createdCoursesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Fetch user's enrollments
+        const enrollmentsQuery = query(
+          collection(db, 'enrollments'),
+          where('userId', '==', user.uid)
+        );
+        const enrollmentsSnapshot = await getDocs(enrollmentsQuery);
+        const enrollments = enrollmentsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Fetch recent published courses (for activities)
+        const recentCoursesQuery = query(
+          collection(db, 'courses'),
+          where('status', '==', 'published'),
+          orderBy('createdAt', 'desc'),
+          limit(5)
+        );
+        const recentCoursesSnapshot = await getDocs(recentCoursesQuery);
+        const recentCoursesData = recentCoursesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Calculate statistics
+        const totalStudents = createdCourses.reduce((total, course) => total + (course.enrollmentCount || 0), 0);
+        const avgRating = createdCourses.length > 0
+          ? createdCourses.reduce((total, course) => total + (course.rating || 0), 0) / createdCourses.length
+          : 0;
+
+        setStats({
+          enrolledCourses: enrollments.length,
+          createdCourses: createdCourses.length,
+          totalStudents,
+          avgRating
+        });
+
+        setRecentCourses(recentCoursesData);
+        setMyEnrollments(enrollments);
+        setMyCourses(createdCourses);
+
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [user]);
+
   const statsCards = [
     {
-      title: "Active Courses",
-      value: "4",
-      description: "Currently enrolled",
+      title: "Enrolled Courses",
+      value: stats.enrolledCourses.toString(),
+      description: "Currently learning",
       icon: BookOpen,
-      trend: "+2 this month",
+      trend: stats.enrolledCourses > 0 ? `${stats.enrolledCourses} active` : "Start learning",
       color: "text-black"
     },
     {
-      title: "Study Hours",
-      value: "127",
-      description: "Total this month",
-      icon: Clock,
-      trend: "+15% from last month",
-      color: "text-black"
-    },
-    {
-      title: "Collaborations",
-      value: "12",
-      description: "Active sessions",
+      title: "Created Courses",
+      value: stats.createdCourses.toString(),
+      description: "Teaching others",
       icon: Users,
-      trend: "+3 new this week",
+      trend: stats.createdCourses > 0 ? `${stats.totalStudents} total students` : "Create your first",
       color: "text-black"
     },
     {
-      title: "Performance",
-      value: "87%",
-      description: "Average score",
+      title: "Average Rating",
+      value: stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "N/A",
+      description: "Course quality",
       icon: TrendingUp,
-      trend: "+5% improvement",
+      trend: stats.avgRating > 0 ? `${stats.createdCourses} course(s)` : "No ratings yet",
+      color: "text-black"
+    },
+    {
+      title: "Total Students",
+      value: stats.totalStudents.toString(),
+      description: "Learning from you",
+      icon: Users,
+      trend: stats.totalStudents > 0 ? "Across all courses" : "Build your audience",
       color: "text-black"
     }
   ];
 
-  const recentActivities = [
-    {
-      type: "course",
-      title: "Completed: Advanced Mathematics",
-      time: "2 hours ago",
-      icon: BookOpen
-    },
-    {
-      type: "collaboration",
-      title: "Joined study group: Physics 101",
-      time: "4 hours ago",
-      icon: Users
-    },
-    {
-      type: "message",
-      title: "New message from Dr. Johnson",
-      time: "1 day ago",
-      icon: MessageSquare
-    },
-    {
-      type: "ai",
-      title: "AI Notes: Biology summary ready",
-      time: "1 day ago",
-      icon: Brain
-    }
-  ];
+  const recentActivities = recentCourses.slice(0, 4).map(course => ({
+    type: "course",
+    title: `New Course: ${course.title}`,
+    time: course.createdAt ? new Date(course.createdAt.seconds * 1000).toLocaleDateString() : 'Recently',
+    icon: BookOpen,
+    creator: course.creatorEmail
+  }));
 
-  const upcomingEvents = [
-    {
-      title: "Virtual Study Session",
-      description: "Mathematics Review with Translation",
-      time: "Today, 3:00 PM",
-      participants: 8
-    },
-    {
-      title: "AI-Powered Quiz",
-      description: "Physics Chapter 5 Assessment",
-      time: "Tomorrow, 10:00 AM",
-      participants: 15
-    },
-    {
-      title: "Global Collaboration",
-      description: "International Student Exchange",
-      time: "Friday, 2:00 PM",
-      participants: 24
-    }
-  ];
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'Recently';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="flex items-center space-x-3">
+          <InfinityLoader size={24} />
+          <span className="text-gray-600">Loading dashboard...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -111,7 +180,7 @@ export default function DashboardPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center space-y-6">
             <h1 className="text-6xl font-light tracking-tight text-black title">
-              Welcome back.
+              Welcome back{user?.displayName ? `, ${user.displayName.split(' ')[0]}` : ''}.
             </h1>
             <p className="text-xl text-gray-600 font-light max-w-2xl mx-auto leading-relaxed">
               Continue your learning journey with personalized insights and seamless collaboration.
@@ -122,8 +191,11 @@ export default function DashboardPage() {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="pt-8"
             >
-              <Button className="bg-black hover:bg-gray-900 text-white px-8 py-4 rounded-full text-base font-medium transition-all duration-200">
-                Continue Learning
+              <Button
+                onClick={() => window.location.href = '/courses'}
+                className="bg-black hover:bg-gray-900 text-white px-8 py-4 rounded-full text-base font-medium transition-all duration-200"
+              >
+                {stats.enrolledCourses > 0 ? 'Continue Learning' : 'Browse Courses'}
                 <ArrowUpRight className="ml-2 h-5 w-5" />
               </Button>
             </motion.div>
@@ -194,25 +266,33 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentActivities.map((activity, index) => (
-                  <div key={index} className="flex items-center space-x-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <activity.icon className="h-4 w-4 text-blue-600" />
+                {recentActivities.length > 0 ? (
+                  recentActivities.map((activity, index) => (
+                    <div key={index} className="flex items-center space-x-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <activity.icon className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {activity.title}
+                        </p>
+                        <p className="text-xs text-gray-500">{activity.time} • {activity.creator}</p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {activity.title}
-                      </p>
-                      <p className="text-xs text-gray-500">{activity.time}</p>
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <BookOpen className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No recent course activity</p>
+                    <p className="text-xs text-gray-400">Create or enroll in courses to see activity</p>
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* Upcoming Events */}
+        {/* My Created Courses */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -221,26 +301,116 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <Clock className="mr-2 h-5 w-5" />
-                Upcoming Events
+                <Users className="mr-2 h-5 w-5" />
+                My Created Courses
               </CardTitle>
-              <CardDescription>Don't miss these learning opportunities</CardDescription>
+              <CardDescription>{stats.createdCourses > 0 ? `Teaching ${stats.totalStudents} students` : 'Share your knowledge'}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {upcomingEvents.map((event, index) => (
-                  <div key={index} className="border-l-2 border-blue-200 pl-4">
-                    <h4 className="font-medium text-gray-900">{event.title}</h4>
-                    <p className="text-sm text-gray-600">{event.description}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-xs text-gray-500">{event.time}</p>
-                      <div className="flex items-center text-xs text-gray-500">
-                        <Users className="mr-1 h-3 w-3" />
-                        {event.participants} participants
+                {myCourses.length > 0 ? (
+                  myCourses.slice(0, 3).map((course, index) => (
+                    <div key={index} className="border-l-2 border-purple-200 pl-4">
+                      <h4 className="font-medium text-gray-900">{course.title}</h4>
+                      <p className="text-sm text-gray-600 line-clamp-2">{course.description}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-gray-500">
+                          {course.createdAt ? new Date(course.createdAt.seconds * 1000).toLocaleDateString() : 'Recently created'}
+                        </p>
+                        <div className="flex items-center space-x-4 text-xs text-gray-500">
+                          <div className="flex items-center">
+                            <Users className="mr-1 h-3 w-3" />
+                            {course.enrollmentCount || 0} students
+                          </div>
+                          <div className="flex items-center">
+                            <BookOpen className="mr-1 h-3 w-3" />
+                            {course.videos?.length || 0} videos
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            course.status === 'published'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {course.status}
+                          </span>
+                        </div>
                       </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <Users className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No courses created yet</p>
+                    <p className="text-xs text-gray-400">Create your first course to start teaching</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.href = '/dashboard/create-course'}
+                      className="mt-3"
+                    >
+                      Create Course
+                    </Button>
                   </div>
-                ))}
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* My Enrolled Courses */}
+      <div className="max-w-6xl mx-auto px-6 pb-16">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.6 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BookOpen className="mr-2 h-5 w-5" />
+                Learning Courses
+              </CardTitle>
+              <CardDescription>{stats.enrolledCourses > 0 ? 'Continue your learning journey' : 'Start learning today'}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {myEnrollments.length > 0 ? (
+                  myEnrollments.slice(0, 3).map((enrollment, index) => (
+                    <div key={index} className="border-l-2 border-blue-200 pl-4">
+                      <h4 className="font-medium text-gray-900">Course Enrollment</h4>
+                      <p className="text-sm text-gray-600">Course ID: {enrollment.courseId}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-gray-500">
+                          Enrolled: {enrollment.enrolledAt ? new Date(enrollment.enrolledAt.seconds * 1000).toLocaleDateString() : 'Recently'}
+                        </p>
+                        <div className="flex items-center space-x-3 text-xs">
+                          <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                            Learning
+                          </span>
+                          <div className="flex items-center text-gray-500">
+                            <Clock className="mr-1 h-3 w-3" />
+                            In Progress
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <BookOpen className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No enrolled courses yet</p>
+                    <p className="text-xs text-gray-400">Browse courses to start learning</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.href = '/courses'}
+                      className="mt-3"
+                    >
+                      Browse Courses
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -252,6 +422,7 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.5 }}
+        className="max-w-6xl mx-auto px-6 pb-16"
       >
         <Card>
           <CardHeader>
@@ -260,25 +431,37 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button variant="outline" className="h-auto p-4 justify-start">
-                <Globe className="mr-3 h-5 w-5 text-blue-600" />
+              <Button
+                variant="outline"
+                className="h-auto p-4 justify-start"
+                onClick={() => window.location.href = '/courses'}
+              >
+                <BookOpen className="mr-3 h-5 w-5 text-blue-600" />
                 <div className="text-left">
-                  <div className="font-medium">Start Translation</div>
-                  <div className="text-sm text-gray-500">Real-time language support</div>
+                  <div className="font-medium">Browse Courses</div>
+                  <div className="text-sm text-gray-500">Discover new learning opportunities</div>
                 </div>
               </Button>
-              <Button variant="outline" className="h-auto p-4 justify-start">
-                <Brain className="mr-3 h-5 w-5 text-purple-600" />
+              <Button
+                variant="outline"
+                className="h-auto p-4 justify-start"
+                onClick={() => window.location.href = '/dashboard/create-course'}
+              >
+                <Users className="mr-3 h-5 w-5 text-purple-600" />
                 <div className="text-left">
-                  <div className="font-medium">AI Summarize</div>
-                  <div className="text-sm text-gray-500">Generate smart notes</div>
+                  <div className="font-medium">Create Course</div>
+                  <div className="text-sm text-gray-500">Share your knowledge</div>
                 </div>
               </Button>
-              <Button variant="outline" className="h-auto p-4 justify-start">
-                <Users className="mr-3 h-5 w-5 text-green-600" />
+              <Button
+                variant="outline"
+                className="h-auto p-4 justify-start"
+                onClick={() => window.location.href = '/dashboard/settings'}
+              >
+                <Brain className="mr-3 h-5 w-5 text-green-600" />
                 <div className="text-left">
-                  <div className="font-medium">Join Collaboration</div>
-                  <div className="text-sm text-gray-500">Connect with peers</div>
+                  <div className="font-medium">Settings</div>
+                  <div className="text-sm text-gray-500">Customize your experience</div>
                 </div>
               </Button>
             </div>

@@ -391,22 +391,6 @@ export default function Home() {
         }}
       />
 
-      {/* Loading state display */}
-      {!framesLoaded && (
-        <div className="fixed top-0 left-0 w-full h-full bg-black z-0 flex flex-col items-center justify-center">
-          <div className="text-white text-lg mb-4">
-            Loading frames... {framesLoadedCount}/{totalFrames}
-          </div>
-          <div className="w-64 h-2 bg-white/20 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white rounded-full transition-all duration-300"
-              style={{ width: `${(framesLoadedCount / totalFrames) * 100}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-
       {/* Dark overlay for better text readability */}
       <div className="fixed top-0 left-0 w-full h-full bg-black/30 z-10" />
 
@@ -430,23 +414,6 @@ export default function Home() {
             }}
           />
         </div>
-      </div>
-
-      {/* Section Indicators */}
-      <div className="fixed left-8 top-1/2 -translate-y-1/2 z-30 space-y-4">
-        {textSections.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => {
-              lenis?.scrollTo(index * window.innerHeight, { duration: 1.5 });
-            }}
-            className={`w-3 h-3 rounded-full transition-all duration-300 ${
-              currentSection === index
-                ? 'bg-white scale-125'
-                : 'bg-white/40 hover:bg-white/60'
-            }`}
-          />
-        ))}
       </div>
     </div>
   );

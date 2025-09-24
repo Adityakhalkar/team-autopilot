@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,13 +38,14 @@ import {
 export default function SettingsPage() {
   const { user, userProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Profile settings state
   const [profileData, setProfileData] = useState({
-    displayName: user?.displayName || '',
-    email: user?.email || '',
+    displayName: '',
+    email: '',
     bio: '',
-    role: 'student',
+    role: 'user',
     timezone: 'UTC-5',
     language: 'en'
   });
@@ -73,30 +76,156 @@ export default function SettingsPage() {
     fontSize: 'medium'
   });
 
+  // Load user data from Firestore
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!user?.uid) return;
+
+      try {
+        setInitialLoading(true);
+
+        // Load user profile
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setProfileData(prev => ({
+            ...prev,
+            displayName: userData.displayName || user.displayName || '',
+            email: user.email || '',
+            bio: userData.bio || '',
+            role: userData.role || 'user',
+            timezone: userData.timezone || 'UTC-5',
+            language: userData.language || 'en'
+          }));
+        } else {
+          // Set default values from auth
+          setProfileData(prev => ({
+            ...prev,
+            displayName: user.displayName || '',
+            email: user.email || ''
+          }));
+        }
+
+        // Load settings
+        const settingsDoc = await getDoc(doc(db, 'settings', user.uid));
+        if (settingsDoc.exists()) {
+          const settingsData = settingsDoc.data();
+          if (settingsData.notifications) setNotifications(settingsData.notifications);
+          if (settingsData.privacy) setPrivacy(settingsData.privacy);
+          if (settingsData.theme) setTheme(settingsData.theme);
+        }
+
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+
+    loadUserData();
+  }, [user]);
+
   const handleSaveProfile = async () => {
+    if (!user?.uid) return;
+
     setIsLoading(true);
     try {
-      // TODO: Save to Firebase/API
-      console.log('Saving profile:', profileData);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Update user profile in users collection
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email,
+        displayName: profileData.displayName,
+        bio: profileData.bio,
+        role: profileData.role,
+        timezone: profileData.timezone,
+        language: profileData.language,
+        lastLoginAt: new Date(),
+        updatedAt: new Date()
+      }, { merge: true });
+
+      alert('Profile updated successfully!');
     } catch (error) {
       console.error('Error saving profile:', error);
+      alert('Error saving profile. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSaveNotifications = async () => {
+    if (!user?.uid) return;
+
     setIsLoading(true);
     try {
-      console.log('Saving notifications:', notifications);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Save notification settings
+      const settingsRef = doc(db, 'settings', user.uid);
+      await setDoc(settingsRef, {
+        notifications,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      alert('Notification preferences saved!');
     } catch (error) {
       console.error('Error saving notifications:', error);
+      alert('Error saving notification preferences. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleSavePrivacy = async () => {
+    if (!user?.uid) return;
+
+    setIsLoading(true);
+    try {
+      // Save privacy settings
+      const settingsRef = doc(db, 'settings', user.uid);
+      await setDoc(settingsRef, {
+        privacy,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      alert('Privacy settings saved!');
+    } catch (error) {
+      console.error('Error saving privacy settings:', error);
+      alert('Error saving privacy settings. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveTheme = async () => {
+    if (!user?.uid) return;
+
+    setIsLoading(true);
+    try {
+      // Save theme settings
+      const settingsRef = doc(db, 'settings', user.uid);
+      await setDoc(settingsRef, {
+        theme,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      alert('Appearance settings saved!');
+    } catch (error) {
+      console.error('Error saving appearance settings:', error);
+      alert('Error saving appearance settings. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="flex items-center space-x-3">
+          <InfinityLoader size={24} />
+          <span className="text-gray-600">Loading settings...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -225,8 +354,8 @@ export default function SettingsPage() {
                         <SelectValue placeholder="Select your role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="student">Student</SelectItem>
-                        <SelectItem value="teacher">Teacher</SelectItem>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="creator">Creator</SelectItem>
                         <SelectItem value="admin">Administrator</SelectItem>
                       </SelectContent>
                     </Select>
@@ -465,9 +594,16 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button disabled={isLoading}>
+                  <Button onClick={handleSavePrivacy} disabled={isLoading}>
                     <Save className="mr-2 h-4 w-4" />
-                    Save Privacy Settings
+                    {isLoading ? (
+                      <>
+                        <InfinityLoader size={16} className="mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Privacy Settings'
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -547,9 +683,16 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button disabled={isLoading}>
+                  <Button onClick={handleSaveTheme} disabled={isLoading}>
                     <Save className="mr-2 h-4 w-4" />
-                    Save Appearance
+                    {isLoading ? (
+                      <>
+                        <InfinityLoader size={16} className="mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Appearance'
+                    )}
                   </Button>
                 </div>
               </CardContent>

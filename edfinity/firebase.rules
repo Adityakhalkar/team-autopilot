@@ -57,19 +57,43 @@ service cloud.firestore {
       // Anyone can read published courses, creators/admins can read all
       allow read: if resource.data.status == 'published' || isCreatorOrAdmin();
 
-      // Only creators and admins can create courses
-      allow create: if isCreatorOrAdmin()
-        && request.resource.data.createdBy == request.auth.uid
+      // Only authenticated users can create courses (allowing all users to create courses)
+      allow create: if isAuthenticated()
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.creatorEmail == request.auth.token.email
         && request.resource.data.status in ['draft', 'published']
-        && request.resource.data.keys().hasAll(['title', 'description', 'createdBy', 'createdAt', 'status']);
+        && request.resource.data.keys().hasAll(['title', 'description', 'creatorId', 'createdAt', 'status'])
+        && validateCourseData(request.resource.data);
 
       // Course owners and admins can update courses
-      allow update: if (isAuthenticated() && resource.data.createdBy == request.auth.uid)
+      allow update: if (isAuthenticated() && resource.data.creatorId == request.auth.uid)
                     || isAdmin();
 
       // Course owners and admins can delete courses
-      allow delete: if (isAuthenticated() && resource.data.createdBy == request.auth.uid)
+      allow delete: if (isAuthenticated() && resource.data.creatorId == request.auth.uid)
                     || isAdmin();
+    }
+
+    // Course data validation function
+    function validateCourseData(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 2000
+        && data.videos is list && data.videos.size() >= 1 && data.videos.size() <= 100
+        && data.enrollmentCount is number && data.enrollmentCount >= 0
+        && data.rating is number && data.rating >= 0 && data.rating <= 5
+        && data.reviewCount is number && data.reviewCount >= 0;
+    }
+
+    // Course videos - Individual videos within courses
+    match /courses/{courseId}/videos/{videoId} {
+      // Same permissions as parent course
+      allow read: if get(/databases/$(database)/documents/courses/$(courseId)).data.status == 'published'
+                  || isCreatorOrAdmin();
+
+      // Course owners and admins can manage videos
+      allow write: if (isAuthenticated() &&
+                      get(/databases/$(database)/documents/courses/$(courseId)).data.creatorId == request.auth.uid)
+                   || isAdmin();
     }
 
     // Course modules - Individual lessons/modules within courses
@@ -80,7 +104,7 @@ service cloud.firestore {
 
       // Course owners and admins can manage modules
       allow write: if (isAuthenticated() &&
-                      get(/databases/$(database)/documents/courses/$(courseId)).data.createdBy == request.auth.uid)
+                      get(/databases/$(database)/documents/courses/$(courseId)).data.creatorId == request.auth.uid)
                    || isAdmin();
     }
 
@@ -89,7 +113,7 @@ service cloud.firestore {
       // Users can read their own enrollments, course creators can read their course enrollments, admins can read all
       allow read: if isOwner(resource.data.userId)
                   || (isAuthenticated() &&
-                      get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.createdBy == request.auth.uid)
+                      get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.creatorId == request.auth.uid)
                   || isAdmin();
 
       // Users can enroll themselves, admins can enroll anyone
@@ -106,7 +130,7 @@ service cloud.firestore {
     // Analytics collection - Course and user analytics
     match /analytics/{analyticsId} {
       // Only course creators can read analytics for their courses, admins can read all
-      allow read: if (isCreator() && resource.data.createdBy == request.auth.uid)
+      allow read: if (isCreator() && resource.data.creatorId == request.auth.uid)
                   || isAdmin();
 
       // System-generated analytics (via Cloud Functions)
@@ -127,7 +151,7 @@ service cloud.firestore {
       // Users can read/write their own progress, course creators can read their course progress
       allow read: if isOwner(userId)
                   || (isAuthenticated() &&
-                      get(/databases/$(database)/documents/courses/$(courseId)).data.createdBy == request.auth.uid)
+                      get(/databases/$(database)/documents/courses/$(courseId)).data.creatorId == request.auth.uid)
                   || isAdmin();
 
       allow write: if isOwner(userId);
@@ -147,7 +171,7 @@ service cloud.firestore {
       // Users can update/delete their own posts, course creators and admins can moderate
       allow update, delete: if isOwner(resource.data.userId)
                             || (isAuthenticated() &&
-                                get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.createdBy == request.auth.uid)
+                                get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.creatorId == request.auth.uid)
                             || isAdmin();
     }
 
@@ -204,11 +228,11 @@ service cloud.firestore {
 
       // Session creators and participants can update
       allow update: if isValidUser()
-                    && (resource.data.createdBy == request.auth.uid || request.auth.uid in resource.data.participants);
+                    && (resource.data.creatorId == request.auth.uid || request.auth.uid in resource.data.participants);
 
       // Creators and admins can create/delete sessions
-      allow create: if isCreatorOrAdmin() && request.resource.data.createdBy == request.auth.uid;
-      allow delete: if (isAuthenticated() && resource.data.createdBy == request.auth.uid) || isAdmin();
+      allow create: if isCreatorOrAdmin() && request.resource.data.creatorId == request.auth.uid;
+      allow delete: if (isAuthenticated() && resource.data.creatorId == request.auth.uid) || isAdmin();
     }
 
     // Admin logs - System audit trails
@@ -239,7 +263,7 @@ service firebase.storage {
       // Only course creators and admins can upload course content
       allow write: if request.auth != null &&
                    (resource == null &&
-                    (get(/databases/(default)/documents/courses/$(courseId)).data.createdBy == request.auth.uid ||
+                    (get(/databases/(default)/documents/courses/$(courseId)).data.creatorId == request.auth.uid ||
                      get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
