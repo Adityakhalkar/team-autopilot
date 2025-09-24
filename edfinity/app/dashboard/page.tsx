@@ -103,7 +103,7 @@ export default function DashboardPage() {
         transition={{ duration: 0.5 }}
       >
         <div className="flex items-center justify-between">
-          <div>
+          <div className="p-6">
             <h1 className="text-3xl font-bold text-gray-900">Welcome back!</h1>
             <p className="text-gray-600 mt-1">Here's what's happening with your learning today.</p>
           </div>

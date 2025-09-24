@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '@/lib/firebase';
+import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import InfinityLoader from '@/components/infinity-loader';
+import RoleUpgrade from '@/components/role-upgrade';
 import {
   Select,
   SelectContent,
@@ -28,11 +29,12 @@ import {
   Palette,
   Camera,
   Save,
-  Trash2
+  Trash2,
+  Crown
 } from 'lucide-react';
 
 export default function SettingsPage() {
-  const [user] = useAuthState(auth);
+  const { user, userProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   // Profile settings state
@@ -111,8 +113,12 @@ export default function SettingsPage() {
         </div>
       </motion.div>
 
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue="account" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="account" className="flex items-center space-x-2">
+            <Crown className="h-4 w-4" />
+            <span>Account</span>
+          </TabsTrigger>
           <TabsTrigger value="profile" className="flex items-center space-x-2">
             <User className="h-4 w-4" />
             <span>Profile</span>
@@ -130,6 +136,11 @@ export default function SettingsPage() {
             <span>Appearance</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* Account Settings - Role Management */}
+        <TabsContent value="account" className="space-y-6">
+          <RoleUpgrade />
+        </TabsContent>
 
         {/* Profile Settings */}
         <TabsContent value="profile" className="space-y-6">
@@ -235,7 +246,14 @@ export default function SettingsPage() {
                 <div className="flex justify-end">
                   <Button onClick={handleSaveProfile} disabled={isLoading}>
                     <Save className="mr-2 h-4 w-4" />
-                    {isLoading ? 'Saving...' : 'Save Changes'}
+{isLoading ? (
+                      <>
+                        <InfinityLoader size={16} className="mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -343,7 +361,14 @@ export default function SettingsPage() {
                 <div className="flex justify-end">
                   <Button onClick={handleSaveNotifications} disabled={isLoading}>
                     <Save className="mr-2 h-4 w-4" />
-                    {isLoading ? 'Saving...' : 'Save Preferences'}
+{isLoading ? (
+                      <>
+                        <InfinityLoader size={16} className="mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Preferences'
+                    )}
                   </Button>
                 </div>
               </CardContent>

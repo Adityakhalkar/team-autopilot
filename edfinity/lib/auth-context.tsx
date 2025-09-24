@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, signOutUser } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export type UserRole = 'user' | 'creator' | 'admin';
@@ -31,6 +31,7 @@ interface AuthContextType {
   updateUserRole: (role: UserRole) => Promise<void>;
   isRole: (role: UserRole) => boolean;
   hasPermission: (permission: string) => boolean;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -135,6 +136,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return userPermissions.includes(permission);
   };
 
+  const signOut = async (): Promise<void> => {
+    try {
+      const result = await signOutUser();
+      if (result.error) {
+        console.error('Error signing out:', result.error);
+        throw new Error(result.error);
+      }
+      // Clear user profile on successful sign out
+      setUserProfile(null);
+    } catch (error) {
+      console.error('Sign out failed:', error);
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     userProfile,
@@ -142,7 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     error,
     updateUserRole,
     isRole,
-    hasPermission
+    hasPermission,
+    signOut
   };
 
   return (

@@ -1,0 +1,258 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    function isCreator() {
+      return isAuthenticated() && getUserRole() == 'creator';
+    }
+
+    function isCreatorOrAdmin() {
+      return isAuthenticated() && (getUserRole() == 'creator' || getUserRole() == 'admin');
+    }
+
+    function isValidUser() {
+      return isAuthenticated() && getUserRole() in ['user', 'creator', 'admin'];
+    }
+
+    // Users collection - Core user profiles
+    match /users/{userId} {
+      // Users can read their own profile, admins can read all
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Users can create their own profile during signup
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['uid', 'email', 'role', 'createdAt', 'lastLoginAt'])
+        && request.resource.data.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == 'user'; // Default role on creation
+
+      // Users can update their own profile (except role), admins can update any
+      allow update: if (isOwner(userId) &&
+                       !('role' in resource.diff(request.resource).affectedKeys()))
+                    || isAdmin();
+
+      // Only admins can delete user profiles
+      allow delete: if isAdmin();
+    }
+
+    // Courses collection - Main course data
+    match /courses/{courseId} {
+      // Anyone can read published courses, creators/admins can read all
+      allow read: if resource.data.status == 'published' || isCreatorOrAdmin();
+
+      // Only creators and admins can create courses
+      allow create: if isCreatorOrAdmin()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status in ['draft', 'published']
+        && request.resource.data.keys().hasAll(['title', 'description', 'createdBy', 'createdAt', 'status']);
+
+      // Course owners and admins can update courses
+      allow update: if (isAuthenticated() && resource.data.createdBy == request.auth.uid)
+                    || isAdmin();
+
+      // Course owners and admins can delete courses
+      allow delete: if (isAuthenticated() && resource.data.createdBy == request.auth.uid)
+                    || isAdmin();
+    }
+
+    // Course modules - Individual lessons/modules within courses
+    match /courses/{courseId}/modules/{moduleId} {
+      // Same permissions as parent course
+      allow read: if get(/databases/$(database)/documents/courses/$(courseId)).data.status == 'published'
+                  || isCreatorOrAdmin();
+
+      // Course owners and admins can manage modules
+      allow write: if (isAuthenticated() &&
+                      get(/databases/$(database)/documents/courses/$(courseId)).data.createdBy == request.auth.uid)
+                   || isAdmin();
+    }
+
+    // Enrollments collection - User course enrollments
+    match /enrollments/{enrollmentId} {
+      // Users can read their own enrollments, course creators can read their course enrollments, admins can read all
+      allow read: if isOwner(resource.data.userId)
+                  || (isAuthenticated() &&
+                      get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.createdBy == request.auth.uid)
+                  || isAdmin();
+
+      // Users can enroll themselves, admins can enroll anyone
+      allow create: if (isAuthenticated() && request.resource.data.userId == request.auth.uid)
+                    || isAdmin();
+
+      // Users can update their own enrollment progress, admins can update any
+      allow update: if isOwner(resource.data.userId) || isAdmin();
+
+      // Users can unenroll themselves, admins can remove any enrollment
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // Analytics collection - Course and user analytics
+    match /analytics/{analyticsId} {
+      // Only course creators can read analytics for their courses, admins can read all
+      allow read: if (isCreator() && resource.data.createdBy == request.auth.uid)
+                  || isAdmin();
+
+      // System-generated analytics (via Cloud Functions)
+      allow create, update: if isAdmin();
+    }
+
+    // User progress tracking
+    match /progress/{userId} {
+      // Users can read their own progress, course creators can read progress for their courses
+      allow read: if isOwner(userId) || isCreatorOrAdmin();
+
+      // Users can update their own progress
+      allow write: if isOwner(userId);
+    }
+
+    // Course progress detail
+    match /progress/{userId}/courses/{courseId} {
+      // Users can read/write their own progress, course creators can read their course progress
+      allow read: if isOwner(userId)
+                  || (isAuthenticated() &&
+                      get(/databases/$(database)/documents/courses/$(courseId)).data.createdBy == request.auth.uid)
+                  || isAdmin();
+
+      allow write: if isOwner(userId);
+    }
+
+    // Discussions/Comments - Course discussions and Q&A
+    match /discussions/{discussionId} {
+      // Enrolled users can read discussions for their courses
+      allow read: if isValidUser()
+                  && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + resource.data.courseId));
+
+      // Enrolled users can create discussions/comments
+      allow create: if isValidUser()
+                    && request.resource.data.userId == request.auth.uid
+                    && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + request.resource.data.courseId));
+
+      // Users can update/delete their own posts, course creators and admins can moderate
+      allow update, delete: if isOwner(resource.data.userId)
+                            || (isAuthenticated() &&
+                                get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.createdBy == request.auth.uid)
+                            || isAdmin();
+    }
+
+    // Notifications - User notifications
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // System can create notifications (via Cloud Functions)
+      allow create: if isAdmin();
+
+      // Users can mark their notifications as read
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // Settings - User preferences and settings
+    match /settings/{userId} {
+      // Users can read/write their own settings
+      allow read, write: if isOwner(userId);
+    }
+
+    // Reports - Admin reports and analytics
+    match /reports/{reportId} {
+      // Only admins can access reports
+      allow read, write: if isAdmin();
+    }
+
+    // AI Summaries - AI-generated content summaries
+    match /ai-summaries/{summaryId} {
+      // Users can read summaries for courses they're enrolled in
+      allow read: if isValidUser()
+                  && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + resource.data.courseId));
+
+      // System generates summaries (via Cloud Functions)
+      allow create, update: if isAdmin();
+    }
+
+    // Translations - Live translation data
+    match /translations/{translationId} {
+      // Users can read/write translations for sessions they're part of
+      allow read, write: if isValidUser()
+                         && request.auth.uid in resource.data.participants;
+    }
+
+    // Sessions - Live collaboration sessions
+    match /sessions/{sessionId} {
+      // Participants can read session data
+      allow read: if isValidUser()
+                  && request.auth.uid in resource.data.participants;
+
+      // Session creators and participants can update
+      allow update: if isValidUser()
+                    && (resource.data.createdBy == request.auth.uid || request.auth.uid in resource.data.participants);
+
+      // Creators and admins can create/delete sessions
+      allow create: if isCreatorOrAdmin() && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if (isAuthenticated() && resource.data.createdBy == request.auth.uid) || isAdmin();
+    }
+
+    // Admin logs - System audit trails
+    match /admin-logs/{logId} {
+      // Only admins can access logs
+      allow read: if isAdmin();
+
+      // System creates logs (via Cloud Functions)
+      allow create: if isAdmin();
+    }
+  }
+}
+
+// Storage rules for file uploads
+service firebase.storage {
+  match /b/{bucket}/o {
+    // User profile images
+    match /profile-images/{userId}/{allPaths=**} {
+      allow read: if true; // Public read for profile images
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Course content (videos, images, documents)
+    match /course-content/{courseId}/{allPaths=**} {
+      // Public read for published course content
+      allow read: if true;
+
+      // Only course creators and admins can upload course content
+      allow write: if request.auth != null &&
+                   (resource == null &&
+                    (get(/databases/(default)/documents/courses/$(courseId)).data.createdBy == request.auth.uid ||
+                     get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    // User uploads (assignments, submissions)
+    match /user-uploads/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // System files (AI summaries, generated content)
+    match /system/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                   get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+  }
+}

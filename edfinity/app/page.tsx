@@ -6,28 +6,6 @@ import Link from 'next/link';
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Navigation */}
-      <nav className="px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-gray-100">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-2xl font-bold text-gray-800"
-          >
-            EdFinity
-          </motion.div>
-          <div className="hidden md:flex items-center space-x-8">
-            <a href="#features" className="text-gray-600 hover:text-gray-800 transition-colors">Features</a>
-            <a href="#about" className="text-gray-600 hover:text-gray-800 transition-colors">About</a>
-            <a href="#contact" className="text-gray-600 hover:text-gray-800 transition-colors">Contact</a>
-            <Link href="/auth">
-              <button className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors">
-                Get Started
-              </button>
-            </Link>
-          </div>
-        </div>
-      </nav>
 
       {/* Hero Section */}
       <section className="px-6 py-20">
@@ -36,7 +14,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-5xl md:text-6xl font-bold text-gray-900 mb-6"
+            className="text-5xl md:text-6xl font-normal text-gray-900 mb-6"
           >
             Global EdTech
             <br />

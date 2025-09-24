@@ -28,6 +28,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
+import InfinityLoader from '@/components/infinity-loader';
 import {
   Youtube,
   Plus,
@@ -236,7 +237,14 @@ export default function CreateCoursePage() {
             </Button>
             <Button onClick={handleSaveCourse} disabled={isLoading}>
               <Save className="mr-2 h-4 w-4" />
-              {isLoading ? 'Saving...' : 'Save Course'}
+{isLoading ? (
+                <>
+                  <InfinityLoader size={16} className="mr-2" />
+                  Saving...
+                </>
+              ) : (
+                'Save Course'
+              )}
             </Button>
           </div>
         </div>
@@ -374,7 +382,10 @@ export default function CreateCoursePage() {
                       disabled={isFetchingVideos || !courseData.playlistUrl.trim()}
                     >
                       {isFetchingVideos ? (
-                        <>Loading...</>
+                        <div className="flex items-center">
+                          <InfinityLoader size={16} className="mr-2" />
+                          Loading...
+                        </div>
                       ) : (
                         <>
                           <Link className="mr-2 h-4 w-4" />
